@@ -650,6 +650,19 @@ export const AntigravityIcon: Icon = (props) => (
   </svg>
 );
 
+export const CommandCodeIcon: Icon = (props) => (
+  <svg {...props} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect width="32" height="32" rx="8" className="fill-neutral-900 dark:fill-neutral-100" />
+    <path
+      d="M9 11.5 13.5 16 9 20.5M16.5 21.5h6.5"
+      className="stroke-neutral-100 dark:stroke-neutral-900"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 export const OpenCodeIcon: Icon = (props) => (
   <svg {...props} viewBox="0 0 32 40" fill="none" xmlns="http://www.w3.org/2000/svg">
     <g clipPath="url(#opencode__clip0_1311_94969)">

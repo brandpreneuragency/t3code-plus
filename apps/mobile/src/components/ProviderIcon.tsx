@@ -50,6 +50,26 @@ export function ProviderIcon(props: ProviderIconProps) {
     );
   }
 
+  if (props.provider === "commandCode") {
+    const fill = isDarkMode ? "#e5e5e5" : "#171717";
+    const stroke = isDarkMode ? "#171717" : "#e5e5e5";
+    return (
+      <Svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+        <Path
+          d="M8 0h16a8 8 0 0 1 8 8v16a8 8 0 0 1-8 8H8a8 8 0 0 1-8-8V8a8 8 0 0 1 8-8Z"
+          fill={fill}
+        />
+        <Path
+          d="M9 11.5 13.5 16 9 20.5M16.5 21.5h6.5"
+          stroke={stroke}
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    );
+  }
+
   if (props.provider === "opencode") {
     return (
       <Svg width={size} height={size} viewBox="0 0 32 40" fill="none">

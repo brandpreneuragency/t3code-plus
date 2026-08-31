@@ -7,15 +7,16 @@ orchestration layer does not know which one is behind a thread.
 
 ## Built-in drivers
 
-[`builtInDrivers.ts`][drivers] exports `BUILT_IN_DRIVERS` with five entries:
+[`builtInDrivers.ts`][drivers] exports `BUILT_IN_DRIVERS` with six entries:
 
-| Driver kind   | Driver source                           |
-| ------------- | --------------------------------------- |
-| `codex`       | [`Drivers/CodexDriver.ts`][codex]       |
-| `claudeAgent` | [`Drivers/ClaudeDriver.ts`][claude]     |
-| `cursor`      | [`Drivers/CursorDriver.ts`][cursor]     |
-| `grok`        | [`Drivers/GrokDriver.ts`][grok]         |
-| `opencode`    | [`Drivers/OpenCodeDriver.ts`][opencode] |
+| Driver kind   | Driver source                                  |
+| ------------- | ---------------------------------------------- |
+| `codex`       | [`Drivers/CodexDriver.ts`][codex]              |
+| `claudeAgent` | [`Drivers/ClaudeDriver.ts`][claude]            |
+| `cursor`      | [`Drivers/CursorDriver.ts`][cursor]            |
+| `grok`        | [`Drivers/GrokDriver.ts`][grok]                |
+| `commandCode` | [`Drivers/CommandCodeDriver.ts`][command-code] |
+| `opencode`    | [`Drivers/OpenCodeDriver.ts`][opencode]        |
 
 Each driver declares its `driverKind`, a `configSchema`, and a `create` function that builds an
 adapter in a child scope. Adapter implementations live beside them in
@@ -164,6 +165,7 @@ when a request opens (approval) or user input is requested, via
 [claude]: ../../apps/server/src/provider/Drivers/ClaudeDriver.ts
 [cursor]: ../../apps/server/src/provider/Drivers/CursorDriver.ts
 [grok]: ../../apps/server/src/provider/Drivers/GrokDriver.ts
+[command-code]: ../../apps/server/src/provider/Drivers/CommandCodeDriver.ts
 [opencode]: ../../apps/server/src/provider/Drivers/OpenCodeDriver.ts
 [opencode-server-owner]: ../../apps/server/src/provider/OpenCodeServerOwner.ts
 [adapter]: ../../apps/server/src/provider/Services/ProviderAdapter.ts

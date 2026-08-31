@@ -4,6 +4,7 @@ import {
   CommandCodeSettings,
   CursorSettings,
   GrokSettings,
+  HermesSettings,
   OpenCodeSettings,
   ProviderDriverKind,
 } from "@t3tools/contracts";
@@ -13,6 +14,7 @@ import {
   CommandCodeIcon,
   CursorIcon,
   GrokIcon,
+  HermesIcon,
   type Icon,
   OpenAI,
   OpenCodeIcon,
@@ -69,6 +71,13 @@ export const PROVIDER_CLIENT_DEFINITIONS: readonly ProviderClientDefinition[] = 
     icon: GrokIcon,
     badgeLabel: "Early Access",
     settingsSchema: GrokSettings,
+  },
+  {
+    value: ProviderDriverKind.make("hermes"),
+    label: "Hermes",
+    icon: HermesIcon,
+    badgeLabel: "Early Access",
+    settingsSchema: HermesSettings,
   },
   {
     value: ProviderDriverKind.make("commandCode"),

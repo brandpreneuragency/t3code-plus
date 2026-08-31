@@ -65,6 +65,11 @@ export interface AcpSpawnInput {
   readonly env?: NodeJS.ProcessEnv;
 }
 
+export type AcpAuthMethodId =
+  | string
+  | null
+  | ((initializeResult: EffectAcpSchema.InitializeResponse) => string | null);
+
 export interface AcpSessionRuntimeOptions {
   readonly spawn: AcpSpawnInput;
   readonly cwd: string;
@@ -76,7 +81,12 @@ export interface AcpSessionRuntimeOptions {
     readonly name: string;
     readonly version: string;
   };
-  readonly authMethodId: string;
+  /**
+   * Static ACP `authenticate` method id, or a resolver that picks one from
+   * `initialize`. `null`/omitted skips authenticate — some agents (Hermes)
+   * can create sessions from already-configured credentials without it.
+   */
+  readonly authMethodId?: AcpAuthMethodId;
   readonly mcpServers?: ReadonlyArray<EffectAcpSchema.McpServer>;
   readonly requestLogger?: (event: AcpSessionRequestLogEvent) => Effect.Effect<void, never>;
   readonly protocolLogging?: {
@@ -84,6 +94,19 @@ export interface AcpSessionRuntimeOptions {
     readonly logOutgoing?: boolean;
     readonly logger?: (event: EffectAcpProtocol.AcpProtocolLogEvent) => Effect.Effect<void, never>;
   };
+}
+
+function resolveAcpAuthMethodId(
+  authMethodId: AcpAuthMethodId | undefined,
+  initializeResult: EffectAcpSchema.InitializeResponse,
+): string | undefined {
+  const resolved =
+    typeof authMethodId === "function" ? authMethodId(initializeResult) : authMethodId;
+  if (typeof resolved !== "string") {
+    return undefined;
+  }
+  const trimmed = resolved.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 export interface AcpSessionRequestLogEvent {
@@ -183,7 +206,7 @@ export class AcpSessionRuntime extends Context.Service<
      */
     readonly handleExtNotification: EffectAcpClient.AcpClient["Service"]["handleExtNotification"];
     /**
-     * Initializes the ACP connection, authenticates, and loads, resumes, or creates the session.
+     * Initializes the ACP connection, optionally authenticates, and loads, resumes, or creates the session.
      * Concurrent calls share the same in-flight startup and a failed startup may be retried.
      */
     readonly start: () => Effect.Effect<AcpSessionRuntimeStartResult, EffectAcpErrors.AcpError>;
@@ -550,15 +573,18 @@ export const make = (
         acp.agent.initialize(initializePayload),
       );
 
-      const authenticatePayload = {
-        methodId: options.authMethodId,
-      } satisfies EffectAcpSchema.AuthenticateRequest;
+      const resolvedAuthMethodId = resolveAcpAuthMethodId(options.authMethodId, initializeResult);
+      if (resolvedAuthMethodId !== undefined) {
+        const authenticatePayload = {
+          methodId: resolvedAuthMethodId,
+        } satisfies EffectAcpSchema.AuthenticateRequest;
 
-      yield* runLoggedRequest(
-        "authenticate",
-        authenticatePayload,
-        acp.agent.authenticate(authenticatePayload),
-      );
+        yield* runLoggedRequest(
+          "authenticate",
+          authenticatePayload,
+          acp.agent.authenticate(authenticatePayload),
+        );
+      }
 
       let sessionId: string;
       let sessionSetupResult:

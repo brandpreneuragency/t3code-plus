@@ -1,3 +1,51 @@
+# This is a fork — don't forget
+
+This folder is **your copy** of T3 Code. You can still pull **their new updates**.
+
+Three copies of the same project:
+
+1. **Theirs** (`upstream`) — pingdotgg’s original repo
+2. **Yours on GitHub** (`origin`) — `brandpreneuragency/t3code`
+3. **Yours on this PC** — this `T3-FORK` folder
+
+Two branches:
+
+- **`main`** — keep this matching theirs. Don’t put custom work here.
+- **`my-mods`** — this is where you make your changes. Stay on this branch.
+
+When T3 ships updates:
+
+```powershell
+git checkout main
+git fetch upstream
+git merge upstream/main
+git push origin main
+git checkout my-mods
+git rebase main
+```
+
+Your experiments live on `my-mods`. Their code stays clean on `main`.
+
+## Packaged Windows app
+
+This fork installs as **T3 Code +**, next to official T3 Code. It does not replace it.
+
+- Shortcut: Start Menu / Desktop → **T3 Code +**
+- Data folder: `C:\Users\burak\.t3-fork` (official T3 stays in `C:\Users\burak\.t3`)
+- Install folder: `%LOCALAPPDATA%\Programs\T3 Code +` (official T3 stays in `Programs\t3code`)
+- Do not run official T3 Code and T3 Code + at the same time.
+
+Rebuild the installer from this repo:
+
+```powershell
+vp i
+vp run dist:desktop:win:x64
+```
+
+The installer lands in `release\`.
+
+---
+
 # T3 Code
 
 T3 Code is a minimal GUI for coding agents. A Node WebSocket server wraps provider CLIs (Codex, Claude Code, Cursor, Grok, OpenCode) and serves web, desktop, and mobile clients.

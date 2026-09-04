@@ -34,18 +34,22 @@ export const CatalogueWireModel = Schema.Struct({
   parallelAgentSupport: CappedText(256),
   bestUse: CappedText(1000),
   avoidFor: CappedText(1000),
-  benchmarkConfidence: Schema.NullOr(Schema.Number),
+  benchmarkConfidence: Schema.NullOr(
+    Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 100 })),
+  ),
   favourite: Schema.Boolean,
   status: CappedText(32),
   verifiedOn: CappedText(32),
-  aliases: Schema.Array(Schema.String.check(Schema.isMaxLength(200))),
+  aliases: Schema.Array(Schema.String.check(Schema.isMaxLength(200))).check(
+    Schema.isMaxLength(100),
+  ),
 });
 export type CatalogueWireModel = typeof CatalogueWireModel.Type;
 
 export const CatalogueWireEnvelope = Schema.Struct({
   catalogueVersion: Schema.Number,
-  generatedAt: Schema.String,
-  models: Schema.Array(CatalogueWireModel),
+  generatedAt: Schema.String.check(Schema.isMaxLength(64)),
+  models: Schema.Array(CatalogueWireModel).check(Schema.isMaxLength(500)),
 });
 export type CatalogueWireEnvelope = typeof CatalogueWireEnvelope.Type;
 

@@ -220,6 +220,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     targetId: "browser",
   },
   {
+    id: "model-catalogue",
+    title: "Model catalogue",
+    to: "/settings/integrations",
+    targetId: "model-catalogue",
+  },
+  {
     id: "browser-default-viewport",
     title: "Default browser viewport",
     to: "/settings/integrations",

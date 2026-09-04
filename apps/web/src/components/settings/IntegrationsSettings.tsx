@@ -19,15 +19,24 @@ import {
   PREVIEW_ZOOM_LEVELS,
   type PreviewAppearancePreference,
   type PreviewViewportSetting,
+  type EnvironmentId,
 } from "@t3tools/contracts";
 import { PREVIEW_VIEWPORT_PRESETS } from "@t3tools/shared/previewViewport";
 import { InfoIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { useAtomValue } from "@effect/atom-react";
+import * as Option from "effect/Option";
+import { AsyncResult } from "effect/unstable/reactivity";
 
 import { ScreenRotationIcon } from "~/browser/ScreenRotationIcon";
 import { isElectron } from "../../env";
+import { primaryEnvironmentIdAtom } from "../../state/primaryEnvironment";
+import { serverEnvironment } from "../../state/server";
+import { useAtomCommand } from "../../state/use-atom-command";
 
 import { Button } from "../ui/button";
+import { DraftInput } from "../ui/draft-input";
+import { Input } from "../ui/input";
 import { NumberField, NumberFieldGroup, NumberFieldInput } from "../ui/number-field";
 import {
   Select,
@@ -467,6 +476,7 @@ export function IntegrationsSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      <ModelCatalogueSettings />
       <SettingsSection id="browser" title="Browser">
         {/* Server-authoritative, so it stays editable on every client and sits
             outside the block covering the desktop-only defaults. */}
@@ -478,5 +488,129 @@ export function IntegrationsSettingsPanel() {
         )}
       </SettingsSection>
     </SettingsPageContainer>
+  );
+}
+
+function ModelCatalogueSettings() {
+  const environmentId = useAtomValue(primaryEnvironmentIdAtom);
+  if (environmentId === null) {
+    return (
+      <SettingsSection id="model-catalogue" title="Model catalogue">
+        <p className="px-3 py-3 text-sm text-muted-foreground sm:px-4">
+          Connect a server environment to configure the model catalogue.
+        </p>
+      </SettingsSection>
+    );
+  }
+  return <ModelCatalogueSettingsForEnvironment environmentId={environmentId} />;
+}
+
+function ModelCatalogueSettingsForEnvironment({
+  environmentId,
+}: {
+  readonly environmentId: EnvironmentId;
+}) {
+  const catalogueUrl = usePrimarySettings((settings) => settings.modelCatalogueUrl);
+  const updateSettings = useUpdatePrimarySettings();
+  const statusResult = useAtomValue(
+    serverEnvironment.modelCatalogueCredentialStatus({ environmentId, input: {} }),
+  );
+  const status = Option.getOrNull(AsyncResult.value(statusResult));
+  const setCredential = useAtomCommand(
+    serverEnvironment.setModelCatalogueCredential,
+    "model catalogue credentials",
+  );
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (username.length === 0 || password.length === 0 || saving) return;
+    setSaving(true);
+    const result = await setCredential({
+      environmentId,
+      input: { clear: false, credentials: { username, password } },
+    });
+    setSaving(false);
+    if (result._tag === "Success") {
+      setUsername("");
+      setPassword("");
+    }
+  };
+
+  const clear = async () => {
+    if (saving) return;
+    setSaving(true);
+    const result = await setCredential({ environmentId, input: { clear: true } });
+    setSaving(false);
+    if (result._tag === "Success") {
+      setUsername("");
+      setPassword("");
+    }
+  };
+
+  return (
+    <SettingsSection id="model-catalogue" title="Model catalogue">
+      <SettingsRow
+        title="Catalogue URL"
+        description="The server URL hosting the model catalogue. Clearing it disables the page and hides Models from the sidebar."
+        control={
+          <DraftInput
+            aria-label="Model catalogue URL"
+            className="w-full sm:w-80"
+            value={catalogueUrl}
+            onCommit={(value) => updateSettings({ modelCatalogueUrl: value })}
+            placeholder="https://models.brandpreneur.net"
+            type="url"
+          />
+        }
+      />
+      <SettingsRow
+        title="Basic authentication"
+        description="Credentials are stored on the server and are never shown again."
+        status={
+          statusResult._tag === "Failure"
+            ? "Credential status could not be read."
+            : statusResult.waiting && status === null
+              ? "Checking configuration…"
+              : status?.configured
+                ? "Configured"
+                : "Not configured"
+        }
+        control={
+          <div className="flex w-full flex-wrap justify-end gap-2 sm:w-auto">
+            <Input
+              aria-label="Model catalogue username"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              placeholder="Username"
+              autoComplete="username"
+              className="w-full sm:w-36"
+            />
+            <Input
+              aria-label="Model catalogue password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Password"
+              type="password"
+              autoComplete="new-password"
+              className="w-full sm:w-36"
+            />
+            <Button
+              size="sm"
+              onClick={() => void save()}
+              disabled={saving || !username || !password}
+            >
+              Save
+            </Button>
+            {status?.configured ? (
+              <Button size="sm" variant="outline" onClick={() => void clear()} disabled={saving}>
+                Clear
+              </Button>
+            ) : null}
+          </div>
+        }
+      />
+    </SettingsSection>
   );
 }

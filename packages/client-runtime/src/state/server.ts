@@ -739,6 +739,16 @@ export function createServerEnvironmentAtoms<R, E>(
       Atom.withLabel(`environment-data:server:providers:${environmentId}`),
     ),
   );
+  const modelCatalogue = createEnvironmentRpcQueryAtomFamily(runtime, {
+    label: "environment-data:server:model-catalogue",
+    tag: WS_METHODS.serverGetModelCatalogue,
+    staleTimeMs: 300_000,
+  });
+  const modelCatalogueCredentialStatus = createEnvironmentRpcQueryAtomFamily(runtime, {
+    label: "environment-data:server:model-catalogue-credential-status",
+    tag: WS_METHODS.serverGetModelCatalogueCredentialStatus,
+    staleTimeMs: 300_000,
+  });
 
   return {
     configValueAtom,
@@ -774,6 +784,8 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.serverGetUsageSummary,
       staleTimeMs: 60_000,
     }),
+    modelCatalogue,
+    modelCatalogueCredentialStatus,
     configProjection,
     welcome: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:server:welcome",
@@ -815,6 +827,20 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.serverUpdateSettings,
       scheduler: configScheduler,
       concurrency: configConcurrency,
+    }),
+    setModelCatalogueCredential: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:set-model-catalogue-credential",
+      tag: WS_METHODS.serverSetModelCatalogueCredential,
+      concurrency: {
+        mode: "serial",
+        key: ({ environmentId }) => environmentId,
+      },
+      onSuccess: (target, registry) =>
+        Effect.sync(() => {
+          const readTarget = { environmentId: target.environmentId, input: {} } as const;
+          registry.refresh(modelCatalogueCredentialStatus(readTarget));
+          registry.refresh(modelCatalogue(readTarget));
+        }),
     }),
     signalProcess: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:signal-process",

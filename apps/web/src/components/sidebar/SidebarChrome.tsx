@@ -1,5 +1,6 @@
 import {
   ArrowLeftIcon,
+  BookOpenIcon,
   ChartNoAxesColumnIcon,
   GitPullRequestIcon,
   PlusIcon,
@@ -9,7 +10,7 @@ import type { ReactNode } from "react";
 import { memo, useCallback } from "react";
 import { Link, useCanGoBack, useLocation, useNavigate } from "@tanstack/react-router";
 
-import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
+import { useEnvironmentIdentificationMode, usePrimarySettings } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
 import { useEnvironments } from "../../state/environments";
 import {
@@ -138,11 +139,16 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           ? "project-settings"
           : location.pathname === "/usage"
             ? "usage"
-            : location.pathname === "/pull-requests"
-              ? "pull-requests"
-              : null,
+            : location.pathname === "/models"
+              ? "models"
+              : location.pathname === "/pull-requests"
+                ? "pull-requests"
+                : null,
   });
   const { environments } = useEnvironments();
+  const modelCatalogueConfigured = usePrimarySettings(
+    (settings) => settings.modelCatalogueUrl !== "",
+  );
   // The page reads every connected server, so one of them offering pull requests is enough for
   // the link to lead somewhere.
   const pullRequestsSupported = environments.some(
@@ -168,6 +174,11 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     }
     void navigate({ to: "/usage" });
   }, [isMobile, navigate, setOpenMobile]);
+
+  const handleModelsClick = useCallback(() => {
+    closeMobileSidebar();
+    void navigate({ to: "/models" });
+  }, [closeMobileSidebar, navigate]);
 
   const handleBackClick = useCallback(() => {
     closeMobileSidebar();
@@ -206,6 +217,13 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             label="Usage"
             onClick={handleUsageClick}
           />
+          {modelCatalogueConfigured ? (
+            <SidebarUtilityItem
+              icon={<BookOpenIcon />}
+              label="Models"
+              onClick={handleModelsClick}
+            />
+          ) : null}
         </>
       )}
       <SidebarUpdatePill />

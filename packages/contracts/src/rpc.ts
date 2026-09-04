@@ -193,6 +193,12 @@ import {
   ResourceTelemetrySnapshot,
 } from "./resourceTelemetry.ts";
 import { UsageReadError, UsageSummary, UsageSummaryInput } from "./usage.ts";
+import {
+  ModelCatalogueCredentialError,
+  ModelCatalogueCredentialStatus,
+  ModelCatalogueCredentialUpdate,
+  ModelCatalogueSummary,
+} from "./modelCatalogue.ts";
 import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.ts";
 import {
   SourceControlCloneRepositoryInput,
@@ -291,6 +297,9 @@ export const WS_METHODS = {
   serverReportHostPowerState: "server.reportHostPowerState",
   serverGetBackgroundPolicy: "server.getBackgroundPolicy",
   serverGetUsageSummary: "server.getUsageSummary",
+  serverGetModelCatalogue: "server.getModelCatalogue",
+  serverGetModelCatalogueCredentialStatus: "server.getModelCatalogueCredentialStatus",
+  serverSetModelCatalogueCredential: "server.setModelCatalogueCredential",
 
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
@@ -452,6 +461,30 @@ export const WsServerGetUsageSummaryRpc = Rpc.make(WS_METHODS.serverGetUsageSumm
   success: UsageSummary,
   error: Schema.Union([EnvironmentAuthorizationError, UsageReadError]),
 });
+
+export const WsServerGetModelCatalogueRpc = Rpc.make(WS_METHODS.serverGetModelCatalogue, {
+  payload: Schema.Struct({}),
+  success: ModelCatalogueSummary,
+  error: EnvironmentAuthorizationError,
+});
+
+export const WsServerGetModelCatalogueCredentialStatusRpc = Rpc.make(
+  WS_METHODS.serverGetModelCatalogueCredentialStatus,
+  {
+    payload: Schema.Struct({}),
+    success: ModelCatalogueCredentialStatus,
+    error: Schema.Union([ModelCatalogueCredentialError, EnvironmentAuthorizationError]),
+  },
+);
+
+export const WsServerSetModelCatalogueCredentialRpc = Rpc.make(
+  WS_METHODS.serverSetModelCatalogueCredential,
+  {
+    payload: ModelCatalogueCredentialUpdate,
+    success: ModelCatalogueCredentialStatus,
+    error: Schema.Union([ModelCatalogueCredentialError, EnvironmentAuthorizationError]),
+  },
+);
 
 export const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess, {
   payload: ServerSignalProcessInput,
@@ -1044,6 +1077,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetResourceTelemetryHistoryRpc,
   WsServerRetryResourceTelemetryRpc,
   WsServerGetUsageSummaryRpc,
+  WsServerGetModelCatalogueRpc,
+  WsServerGetModelCatalogueCredentialStatusRpc,
+  WsServerSetModelCatalogueCredentialRpc,
   WsServerSignalProcessRpc,
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,

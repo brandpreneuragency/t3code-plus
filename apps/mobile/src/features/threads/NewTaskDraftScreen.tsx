@@ -59,7 +59,7 @@ import {
   type ComposerDraft,
 } from "../../state/use-composer-drafts";
 import { useEnvironmentServerConfig, useProjects } from "../../state/entities";
-import { resolveSelectableModelSelection } from "../../lib/modelOptions";
+import { modelOptionDisplayLabel, resolveSelectableModelSelection } from "../../lib/modelOptions";
 import { deriveThreadTitleFromPrompt } from "../../lib/projectThreadStartTurn";
 import { armAgentAwarenessLiveActivityForLocalWork } from "../agent-awareness/remoteRegistration";
 import { enqueueThreadOutboxMessage } from "../../state/thread-outbox";
@@ -1152,7 +1152,11 @@ export function NewTaskDraftScreen(props: {
               iconNode={
                 <ProviderIcon provider={flow.selectedModelOption?.providerDriver} size={16} />
               }
-              label={flow.selectedModelOption?.label ?? "Choose model"}
+              label={
+                flow.selectedModelOption
+                  ? modelOptionDisplayLabel(flow.selectedModelOption)
+                  : "Choose model"
+              }
               maxWidth={152}
               onPress={settingsSheetPresentation.open}
             />

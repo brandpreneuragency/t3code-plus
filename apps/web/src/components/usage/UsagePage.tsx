@@ -1,5 +1,6 @@
 import type { UsageProviderKind } from "@t3tools/contracts";
 import { CheckIcon, RefreshCwIcon, XIcon } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
 import type { DailyTotals, HourlyTotals } from "@t3tools/shared/usageMerge";
@@ -42,6 +43,7 @@ const WINDOW_OPTIONS = [
 ] as const;
 
 export function UsagePage() {
+  const navigate = useNavigate();
   const [windowSelection, setWindowSelection] = useState(() => ({
     days: 30,
     window: makeWindow(30),
@@ -151,6 +153,9 @@ export function UsagePage() {
             </Toggle>
           ))}
         </ToggleGroup>
+        <Button onClick={() => void navigate({ to: "/limits" })} size="sm" variant="ghost">
+          Limits
+        </Button>
         <Button onClick={refreshWindow} aria-label="Refresh usage" size="icon-sm" variant="ghost">
           <RefreshCwIcon className="size-3.5" />
         </Button>
@@ -194,6 +199,9 @@ export function UsagePage() {
             ))}
           </SelectPopup>
         </Select>
+        <Button onClick={() => void navigate({ to: "/limits" })} size="sm" variant="ghost">
+          Limits
+        </Button>
         <Button onClick={refreshWindow} aria-label="Refresh usage" size="icon-sm" variant="ghost">
           <RefreshCwIcon className="size-3.5" />
         </Button>

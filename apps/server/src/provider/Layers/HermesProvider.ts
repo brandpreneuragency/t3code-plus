@@ -1,3 +1,7 @@
+// @effect-diagnostics nodeBuiltinImport:off
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import {
   type HermesSettings,
   type ModelCapabilities,
@@ -42,6 +46,20 @@ const EMPTY_CAPABILITIES: ModelCapabilities = createModelCapabilities({
 
 const VERSION_PROBE_TIMEOUT_MS = 12_000;
 const HERMES_ACP_MODEL_DISCOVERY_TIMEOUT_MS = 20_000;
+const HERMES_INVENTORY_DISCOVERY_TIMEOUT_MS = 45_000;
+
+const HERMES_INVENTORY_SCRIPT = `import json
+from hermes_cli.inventory import build_models_payload, load_picker_context
+payload = build_models_payload(load_picker_context(), explicit_only=False)
+print(json.dumps({
+  "provider": payload.get("provider"),
+  "model": payload.get("model"),
+  "providers": [
+    {"slug": row.get("slug"), "name": row.get("name"), "models": row.get("models") or []}
+    for row in payload.get("providers") or []
+  ],
+}))
+`;
 
 export const HERMES_SETUP_MESSAGE = "Run `hermes setup` on the host to configure a provider.";
 
@@ -101,6 +119,111 @@ export function parseHermesSubProvider(description: string | null | undefined): 
   const match = description?.trim().match(HERMES_SUB_PROVIDER_DESCRIPTION);
   const subProvider = match?.[1]?.trim();
   return subProvider && subProvider.length > 0 ? subProvider : undefined;
+}
+
+export function encodeHermesModelChoice(provider: string, model: string): string {
+  const rawModel = model.trim();
+  if (!rawModel) {
+    return "";
+  }
+  const rawProvider = provider.trim().toLowerCase();
+  return rawProvider ? `${rawProvider}:${rawModel}` : rawModel;
+}
+
+export interface HermesInventoryProviderRow {
+  readonly slug?: unknown;
+  readonly name?: unknown;
+  readonly models?: unknown;
+}
+
+export interface HermesInventoryPayload {
+  readonly provider?: unknown;
+  readonly model?: unknown;
+  readonly providers?: unknown;
+}
+
+export function buildHermesDiscoveredModelsFromInventory(
+  payload: HermesInventoryPayload | null | undefined,
+): ReadonlyArray<ServerProviderModel> {
+  const providers = Array.isArray(payload?.providers) ? payload.providers : [];
+  const currentSlug = encodeHermesModelChoice(
+    typeof payload?.provider === "string" ? payload.provider : "",
+    typeof payload?.model === "string" ? payload.model : "",
+  );
+  const seen = new Set<string>();
+  const models: ServerProviderModel[] = [];
+
+  for (const row of providers) {
+    if (row === null || typeof row !== "object") {
+      continue;
+    }
+    const providerRow = row as HermesInventoryProviderRow;
+    const providerSlug = typeof providerRow.slug === "string" ? providerRow.slug.trim() : "";
+    if (!providerSlug) {
+      continue;
+    }
+    const label =
+      typeof providerRow.name === "string" && providerRow.name.trim().length > 0
+        ? providerRow.name.trim()
+        : providerSlug;
+    const modelIds = Array.isArray(providerRow.models) ? providerRow.models : [];
+    for (const modelId of modelIds) {
+      if (typeof modelId !== "string") {
+        continue;
+      }
+      const trimmedModelId = modelId.trim();
+      const slug = encodeHermesModelChoice(providerSlug, trimmedModelId);
+      if (!slug || seen.has(slug)) {
+        continue;
+      }
+      seen.add(slug);
+      models.push({
+        slug,
+        name: trimmedModelId,
+        subProvider: label,
+        isCustom: false,
+        ...(slug === currentSlug ? { isDefault: true } : {}),
+        capabilities: EMPTY_CAPABILITIES,
+      });
+    }
+  }
+
+  return models;
+}
+
+export function mergeHermesDiscoveredModels(
+  acpModels: ReadonlyArray<ServerProviderModel>,
+  inventoryModels: ReadonlyArray<ServerProviderModel>,
+): ReadonlyArray<ServerProviderModel> {
+  const bySlug = new Map<string, ServerProviderModel>();
+  for (const model of inventoryModels) {
+    bySlug.set(model.slug, model);
+  }
+  for (const model of acpModels) {
+    const existing = bySlug.get(model.slug);
+    bySlug.set(
+      model.slug,
+      existing
+        ? {
+            ...existing,
+            ...model,
+            subProvider: model.subProvider ?? existing.subProvider,
+          }
+        : model,
+    );
+  }
+
+  const defaultSlug =
+    acpModels.find((model) => model.isDefault === true)?.slug ??
+    inventoryModels.find((model) => model.isDefault === true)?.slug;
+  if (!defaultSlug) {
+    return [...bySlug.values()];
+  }
+
+  return [...bySlug.values()].map((model) => {
+    const { isDefault: _isDefault, ...rest } = model;
+    return model.slug === defaultSlug ? { ...rest, isDefault: true } : rest;
+  });
 }
 
 function isHermesTerminalAuthMethod(method: {
@@ -227,6 +350,144 @@ const discoverHermesViaAcp = (
     } satisfies HermesAcpDiscovery;
   }).pipe(Effect.scoped);
 
+export function parseHermesInventoryPayload(stdout: string): HermesInventoryPayload | undefined {
+  const trimmed = stdout.trim();
+  const start = trimmed.indexOf("{");
+  if (start < 0) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(trimmed.slice(start)) as HermesInventoryPayload;
+  } catch {
+    return undefined;
+  }
+}
+
+export function findHermesBinaryOnPath(
+  command: string,
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform,
+): string | undefined {
+  const trimmed = command.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (trimmed.includes("/") || trimmed.includes("\\")) {
+    try {
+      return NodeFS.existsSync(trimmed) ? trimmed : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  const pathValue = env.PATH ?? env.Path ?? "";
+  const delimiter = platform === "win32" ? ";" : ":";
+  const names = platform === "win32" ? [trimmed, `${trimmed}.exe`, `${trimmed}.cmd`] : [trimmed];
+  for (const dir of pathValue.split(delimiter)) {
+    const base = dir.trim().replace(/^["']|["']$/g, "");
+    if (!base) {
+      continue;
+    }
+    for (const name of names) {
+      const candidate = NodePath.join(base, name);
+      try {
+        if (NodeFS.existsSync(candidate)) {
+          return candidate;
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+  return undefined;
+}
+
+export function resolveHermesPythonCandidate(
+  hermesPath: string,
+  platform: NodeJS.Platform,
+): string | undefined {
+  let resolved = hermesPath;
+  try {
+    resolved = NodeFS.realpathSync(hermesPath);
+  } catch {
+    resolved = hermesPath;
+  }
+  const dir = NodePath.dirname(resolved);
+  const names = platform === "win32" ? ["python.exe"] : ["python", "python3"];
+  for (const name of names) {
+    const candidate = NodePath.join(dir, name);
+    try {
+      if (NodeFS.existsSync(candidate)) {
+        return candidate;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
+const discoverHermesInventoryModels = (
+  hermesSettings: HermesSettings,
+  environment: NodeJS.ProcessEnv = process.env,
+) =>
+  Effect.gen(function* () {
+    const platform = yield* HostProcessPlatform;
+    const hermesCommand = hermesSettings.binaryPath || "hermes";
+    const hermesPath = findHermesBinaryOnPath(hermesCommand, environment, platform);
+    if (!hermesPath) {
+      yield* Effect.logWarning("Hermes inventory skipped: hermes binary not found on PATH", {
+        hermesCommand,
+      });
+      return [] as ReadonlyArray<ServerProviderModel>;
+    }
+
+    const pythonPath = resolveHermesPythonCandidate(hermesPath, platform);
+    if (!pythonPath) {
+      yield* Effect.logWarning("Hermes inventory skipped: venv python not found next to hermes", {
+        hermesPath,
+      });
+      return [] as ReadonlyArray<ServerProviderModel>;
+    }
+    const spawnCommand = yield* resolveSpawnCommand(pythonPath, ["-c", HERMES_INVENTORY_SCRIPT], {
+      env: environment,
+    });
+    const result = yield* spawnAndCollect(
+      pythonPath,
+      ChildProcess.make(spawnCommand.command, spawnCommand.args, {
+        env: environment,
+        shell: spawnCommand.shell,
+      }),
+    ).pipe(Effect.timeoutOption(HERMES_INVENTORY_DISCOVERY_TIMEOUT_MS), Effect.result);
+
+    if (Result.isFailure(result)) {
+      yield* Effect.logWarning("Hermes inventory spawn failed", {
+        pythonPath,
+        errorTag: result.failure._tag,
+      });
+      return [] as ReadonlyArray<ServerProviderModel>;
+    }
+    if (Option.isNone(result.success)) {
+      yield* Effect.logWarning("Hermes inventory timed out", {
+        pythonPath,
+        timeoutMs: HERMES_INVENTORY_DISCOVERY_TIMEOUT_MS,
+      });
+      return [] as ReadonlyArray<ServerProviderModel>;
+    }
+    if (result.success.value.code !== 0) {
+      yield* Effect.logWarning("Hermes inventory exited nonzero", {
+        pythonPath,
+        exitCode: result.success.value.code,
+        stderrLength: result.success.value.stderr.length,
+      });
+      return [] as ReadonlyArray<ServerProviderModel>;
+    }
+
+    const payload = parseHermesInventoryPayload(result.success.value.stdout);
+    const models = buildHermesDiscoveredModelsFromInventory(payload);
+    yield* Effect.logInfo(`Hermes inventory models loaded (${models.length})`);
+    return models;
+  });
+
 const runHermesVersionCommand = (
   hermesSettings: HermesSettings,
   environment: NodeJS.ProcessEnv = process.env,
@@ -342,6 +603,13 @@ export const checkHermesProviderStatus = Effect.fn("checkHermesProviderStatus")(
     Effect.timeoutOption(HERMES_ACP_MODEL_DISCOVERY_TIMEOUT_MS),
     Effect.result,
   );
+  const inventoryModels = yield* discoverHermesInventoryModels(hermesSettings, environment).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning("Hermes inventory model discovery failed", {
+        errorTag: causeErrorTag(error),
+      }).pipe(Effect.as([] as ReadonlyArray<ServerProviderModel>)),
+    ),
+  );
 
   if (Result.isFailure(discoveryExit)) {
     yield* Effect.logWarning("Hermes ACP model discovery failed", {
@@ -351,7 +619,14 @@ export const checkHermesProviderStatus = Effect.fn("checkHermesProviderStatus")(
       presentation: HERMES_PRESENTATION,
       enabled: hermesSettings.enabled,
       checkedAt,
-      models: fallbackModels,
+      models:
+        inventoryModels.length > 0
+          ? providerModelsFromSettings(
+              inventoryModels,
+              hermesSettings.customModels,
+              EMPTY_CAPABILITIES,
+            )
+          : fallbackModels,
       probe: {
         installed: true,
         version,
@@ -370,7 +645,14 @@ export const checkHermesProviderStatus = Effect.fn("checkHermesProviderStatus")(
       presentation: HERMES_PRESENTATION,
       enabled: hermesSettings.enabled,
       checkedAt,
-      models: fallbackModels,
+      models:
+        inventoryModels.length > 0
+          ? providerModelsFromSettings(
+              inventoryModels,
+              hermesSettings.customModels,
+              EMPTY_CAPABILITIES,
+            )
+          : fallbackModels,
       probe: {
         installed: true,
         version,
@@ -386,7 +668,7 @@ export const checkHermesProviderStatus = Effect.fn("checkHermesProviderStatus")(
     authMethods: readHermesAuthMethods(discovery.initializeResult),
     sessionStarted: discovery.sessionStarted,
   });
-  const discoveredModels = discovery.models;
+  const discoveredModels = mergeHermesDiscoveredModels(discovery.models, inventoryModels);
   const models =
     discoveredModels.length > 0
       ? providerModelsFromSettings(

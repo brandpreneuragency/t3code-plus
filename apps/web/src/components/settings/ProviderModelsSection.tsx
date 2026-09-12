@@ -21,9 +21,18 @@ import { normalizeCustomModelSlug } from "@t3tools/shared/model";
 import { cn } from "../../lib/utils";
 import { sortModelsForProviderInstance } from "../../modelOrdering";
 import { MAX_CUSTOM_MODEL_LENGTH } from "../../modelSelection";
+import {
+  formatModelNameWithSubProvider,
+  getDisplayModelName,
+  getModelSubProviderLabel,
+} from "../chat/providerIconUtils";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import {
+  groupModelsBySubProvider,
+  nextHiddenModelsForProviderVisibilityToggle,
+} from "./ProviderModelsSection.logic";
 
 /**
  * Placeholder text for the "add a custom model" input, keyed by driver
@@ -102,12 +111,18 @@ export function ProviderModelsSection({
   const listRef = useRef<HTMLDivElement | null>(null);
   const hiddenModelSet = useMemo(() => new Set(hiddenModels), [hiddenModels]);
   const favoriteModelSet = useMemo(() => new Set(favoriteModels), [favoriteModels]);
-  const orderedModels = useMemo(() => {
-    return sortModelsForProviderInstance(models, {
-      favoriteModels: favoriteModelSet,
-      groupFavorites: true,
-      modelOrder,
-    });
+  const builtInModels = useMemo(() => models.filter((model) => !model.isCustom), [models]);
+  const allBuiltInHidden =
+    builtInModels.length > 0 && builtInModels.every((model) => hiddenModelSet.has(model.slug));
+  const modelGroups = useMemo(() => {
+    return groupModelsBySubProvider(models).map((group) => ({
+      ...group,
+      models: sortModelsForProviderInstance(group.models, {
+        favoriteModels: favoriteModelSet,
+        groupFavorites: true,
+        modelOrder,
+      }),
+    }));
   }, [favoriteModelSet, modelOrder, models]);
 
   const handleAdd = () => {
@@ -164,6 +179,10 @@ export function ProviderModelsSection({
     onHiddenModelsChange([...hiddenModels, slug]);
   };
 
+  const handleToggleAllHidden = () => {
+    onHiddenModelsChange(nextHiddenModelsForProviderVisibilityToggle({ models, hiddenModels }));
+  };
+
   const handleToggleFavorite = (slug: string) => {
     if (favoriteModelSet.has(slug)) {
       onFavoriteModelsChange(favoriteModels.filter((model) => model !== slug));
@@ -173,210 +192,267 @@ export function ProviderModelsSection({
   };
 
   const handleMove = (slug: string, direction: -1 | 1) => {
-    const slugs = orderedModels.map((model) => model.slug);
-    const index = slugs.indexOf(slug);
-    const nextIndex = index + direction;
-    if (index < 0 || nextIndex < 0 || nextIndex >= slugs.length) {
-      return;
-    }
-    const next = [...slugs];
-    [next[index], next[nextIndex]] = [next[nextIndex]!, next[index]!];
+    const next = modelGroups.flatMap((group) => {
+      const slugs = group.models.map((model) => model.slug);
+      const index = slugs.indexOf(slug);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= slugs.length) {
+        return slugs;
+      }
+      const reordered = [...slugs];
+      [reordered[index], reordered[nextIndex]] = [reordered[nextIndex]!, reordered[index]!];
+      return reordered;
+    });
     onModelOrderChange(next);
   };
 
   return (
     <div className="lg:flex lg:h-full lg:min-h-0 lg:flex-col">
-      <div className="text-xs font-medium text-foreground">Models</div>
-      <div className="mt-1 text-xs text-muted-foreground">
-        {models.length} model{models.length === 1 ? "" : "s"} available.
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+        <div>
+          <div className="text-xs font-medium text-foreground">Models</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            {models.length} model{models.length === 1 ? "" : "s"} available.
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <span className="size-5" aria-hidden />
+          <span className="size-5" aria-hidden />
+          <span className="size-5" aria-hidden />
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  size="icon-micro"
+                  variant="ghost-muted"
+                  disabled={builtInModels.length === 0}
+                  onClick={handleToggleAllHidden}
+                  aria-label={
+                    allBuiltInHidden ? "Show all models in picker" : "Hide all models from picker"
+                  }
+                />
+              }
+            >
+              {allBuiltInHidden ? (
+                <EyeIcon className="size-3" />
+              ) : (
+                <EyeOffIcon className="size-3" />
+              )}
+            </TooltipTrigger>
+            <TooltipPopup side="top">
+              {allBuiltInHidden ? "Show all in picker" : "Hide all from picker"}
+            </TooltipPopup>
+          </Tooltip>
+        </div>
       </div>
       <div
         ref={listRef}
         className="mt-2 max-h-40 overflow-y-auto pb-1 lg:min-h-0 lg:max-h-none lg:flex-1"
       >
-        {orderedModels.map((model, index) => {
-          const caps = model.capabilities;
-          const capLabels: string[] = [];
-          const isHidden = !model.isCustom && hiddenModelSet.has(model.slug);
-          const isFavorite = favoriteModelSet.has(model.slug);
-          const previousModel = orderedModels[index - 1];
-          const nextModel = orderedModels[index + 1];
-          const canMoveUp =
-            previousModel !== undefined && favoriteModelSet.has(previousModel.slug) === isFavorite;
-          const canMoveDown =
-            nextModel !== undefined && favoriteModelSet.has(nextModel.slug) === isFavorite;
-          const descriptors = caps?.optionDescriptors ?? [];
-          if (descriptors.some((descriptor) => descriptor.id === "fastMode")) {
-            capLabels.push("Fast mode");
-          }
-          if (descriptors.some((descriptor) => descriptor.id === "thinking")) {
-            capLabels.push("Thinking");
-          }
-          if (
-            descriptors.some(
-              (descriptor) =>
-                descriptor.type === "select" &&
-                (descriptor.id === "reasoningEffort" ||
-                  descriptor.id === "effort" ||
-                  descriptor.id === "reasoning" ||
-                  descriptor.id === "variant"),
-            )
-          ) {
-            capLabels.push("Reasoning");
-          }
-          const hasDetails = capLabels.length > 0 || model.name !== model.slug;
+        {modelGroups.map((group) => (
+          <div key={group.key}>
+            {group.label ? (
+              <div className="sticky top-0 z-[1] bg-card py-1.5 text-xs font-medium text-muted-foreground">
+                {group.label}
+              </div>
+            ) : null}
+            {group.models.map((model, index) => {
+              const caps = model.capabilities;
+              const capLabels: string[] = [];
+              const isHidden = !model.isCustom && hiddenModelSet.has(model.slug);
+              const isFavorite = favoriteModelSet.has(model.slug);
+              const previousModel = group.models[index - 1];
+              const nextModel = group.models[index + 1];
+              const canMoveUp =
+                previousModel !== undefined &&
+                favoriteModelSet.has(previousModel.slug) === isFavorite;
+              const canMoveDown =
+                nextModel !== undefined && favoriteModelSet.has(nextModel.slug) === isFavorite;
+              const descriptors = caps?.optionDescriptors ?? [];
+              if (descriptors.some((descriptor) => descriptor.id === "fastMode")) {
+                capLabels.push("Fast mode");
+              }
+              if (descriptors.some((descriptor) => descriptor.id === "thinking")) {
+                capLabels.push("Thinking");
+              }
+              if (
+                descriptors.some(
+                  (descriptor) =>
+                    descriptor.type === "select" &&
+                    (descriptor.id === "reasoningEffort" ||
+                      descriptor.id === "effort" ||
+                      descriptor.id === "reasoning" ||
+                      descriptor.id === "variant"),
+                )
+              ) {
+                capLabels.push("Reasoning");
+              }
+              const hasDetails = capLabels.length > 0 || model.name !== model.slug;
+              const displayName = getDisplayModelName(model);
+              const subProviderLabel = getModelSubProviderLabel(model);
+              const accessibleName = formatModelNameWithSubProvider({
+                name: displayName,
+                subProvider: model.subProvider,
+              });
 
-          return (
-            <div
-              key={`${instanceId}:${model.slug}`}
-              className={cn(
-                "grid min-h-7 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-1",
-                isHidden && "text-muted-foreground",
-              )}
-            >
-              <div className="flex min-w-0 items-center gap-1">
-                <span
+              return (
+                <div
+                  key={`${instanceId}:${model.slug}`}
                   className={cn(
-                    "min-w-0 truncate text-xs",
-                    isHidden ? "text-muted-foreground line-through" : "text-foreground/90",
+                    "grid min-h-7 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-1",
+                    isHidden && "text-muted-foreground",
                   )}
                 >
-                  {model.name}
-                </span>
-                {hasDetails ? (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Button
-                          size="icon-micro"
-                          variant="ghost"
-                          className="text-muted-foreground/60 hover:text-muted-foreground"
-                          aria-label={`Details for ${model.name}`}
-                        />
-                      }
-                    >
-                      <InfoIcon className="size-3" />
-                    </TooltipTrigger>
-                    <TooltipPopup side="top" className="max-w-56">
-                      <div className="space-y-1">
-                        <code className="block text-[11px] text-foreground">{model.slug}</code>
-                        {capLabels.length > 0 ? (
-                          <div className="flex flex-wrap gap-x-2 gap-y-0.5">
-                            {capLabels.map((label) => (
-                              <span key={label} className="text-[10px] text-muted-foreground">
-                                {label}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    </TooltipPopup>
-                  </Tooltip>
-                ) : null}
-                {isHidden ? (
-                  <span className="text-[10px] text-muted-foreground">hidden</span>
-                ) : null}
-                {model.isCustom ? (
-                  <span className="text-[10px] text-muted-foreground">custom</span>
-                ) : null}
-              </div>
-              <div className="flex shrink-0 items-center gap-0.5">
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        size="icon-micro"
-                        variant="ghost-muted"
-                        className={cn(isFavorite && "text-yellow-500 hover:text-yellow-600")}
-                        onClick={() => handleToggleFavorite(model.slug)}
-                        aria-label={`${isFavorite ? "Remove" : "Add"} ${model.name} ${
-                          isFavorite ? "from" : "to"
-                        } favorites`}
-                      />
-                    }
-                  >
-                    <StarIcon className={cn("size-3", isFavorite && "fill-current")} />
-                  </TooltipTrigger>
-                  <TooltipPopup side="top">
-                    {isFavorite ? "Remove from favorites" : "Add to favorites"}
-                  </TooltipPopup>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        size="icon-micro"
-                        variant="ghost-muted"
-                        disabled={!canMoveUp}
-                        onClick={() => handleMove(model.slug, -1)}
-                        aria-label={`Move ${model.name} up`}
-                      />
-                    }
-                  >
-                    <ArrowUpIcon className="size-3" />
-                  </TooltipTrigger>
-                  <TooltipPopup side="top">Move up</TooltipPopup>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        size="icon-micro"
-                        variant="ghost-muted"
-                        disabled={!canMoveDown}
-                        onClick={() => handleMove(model.slug, 1)}
-                        aria-label={`Move ${model.name} down`}
-                      />
-                    }
-                  >
-                    <ArrowDownIcon className="size-3" />
-                  </TooltipTrigger>
-                  <TooltipPopup side="top">Move down</TooltipPopup>
-                </Tooltip>
-                {!model.isCustom ? (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Button
-                          size="icon-micro"
-                          variant="ghost-muted"
-                          onClick={() => handleToggleHidden(model.slug)}
-                          aria-label={`${isHidden ? "Show" : "Hide"} ${model.name}`}
-                        />
-                      }
-                    >
-                      {isHidden ? (
-                        <EyeIcon className="size-3" />
-                      ) : (
-                        <EyeOffIcon className="size-3" />
+                  <div className="flex min-w-0 items-center gap-1">
+                    <span
+                      className={cn(
+                        "min-w-0 truncate text-xs",
+                        isHidden ? "text-muted-foreground line-through" : "text-foreground/90",
                       )}
-                    </TooltipTrigger>
-                    <TooltipPopup side="top">
-                      {isHidden ? "Show in picker" : "Hide from picker"}
-                    </TooltipPopup>
-                  </Tooltip>
-                ) : null}
-                {model.isCustom ? (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Button
-                          size="icon-micro"
-                          variant="ghost-muted"
-                          aria-label={`Remove ${model.slug}`}
-                          onClick={() => handleRemove(model.slug)}
-                        />
-                      }
                     >
-                      <XIcon className="size-3" />
-                    </TooltipTrigger>
-                    <TooltipPopup side="top">Remove custom model</TooltipPopup>
-                  </Tooltip>
-                ) : null}
-              </div>
-            </div>
-          );
-        })}
+                      {subProviderLabel ? (
+                        <span className={cn(!isHidden && "text-muted-foreground")}>
+                          {subProviderLabel} /{" "}
+                        </span>
+                      ) : null}
+                      {displayName}
+                    </span>
+                    {hasDetails ? (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              size="icon-micro"
+                              variant="ghost"
+                              className="text-muted-foreground/60 hover:text-muted-foreground"
+                              aria-label={`Details for ${accessibleName}`}
+                            />
+                          }
+                        >
+                          <InfoIcon className="size-3" />
+                        </TooltipTrigger>
+                        <TooltipPopup side="top" className="max-w-56">
+                          <div className="space-y-1">
+                            <code className="block text-[11px] text-foreground">{model.slug}</code>
+                            {capLabels.length > 0 ? (
+                              <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                                {capLabels.map((label) => (
+                                  <span key={label} className="text-[10px] text-muted-foreground">
+                                    {label}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        </TooltipPopup>
+                      </Tooltip>
+                    ) : null}
+                    {isHidden ? (
+                      <span className="text-[10px] text-muted-foreground">hidden</span>
+                    ) : null}
+                    {model.isCustom ? (
+                      <span className="text-[10px] text-muted-foreground">custom</span>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            size="icon-micro"
+                            variant="ghost-muted"
+                            className={cn(isFavorite && "text-yellow-500 hover:text-yellow-600")}
+                            onClick={() => handleToggleFavorite(model.slug)}
+                            aria-label={`${isFavorite ? "Remove" : "Add"} ${accessibleName} ${
+                              isFavorite ? "from" : "to"
+                            } favorites`}
+                          />
+                        }
+                      >
+                        <StarIcon className={cn("size-3", isFavorite && "fill-current")} />
+                      </TooltipTrigger>
+                      <TooltipPopup side="top">
+                        {isFavorite ? "Remove from favorites" : "Add to favorites"}
+                      </TooltipPopup>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            size="icon-micro"
+                            variant="ghost-muted"
+                            disabled={!canMoveUp}
+                            onClick={() => handleMove(model.slug, -1)}
+                            aria-label={`Move ${accessibleName} up`}
+                          />
+                        }
+                      >
+                        <ArrowUpIcon className="size-3" />
+                      </TooltipTrigger>
+                      <TooltipPopup side="top">Move up</TooltipPopup>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            size="icon-micro"
+                            variant="ghost-muted"
+                            disabled={!canMoveDown}
+                            onClick={() => handleMove(model.slug, 1)}
+                            aria-label={`Move ${accessibleName} down`}
+                          />
+                        }
+                      >
+                        <ArrowDownIcon className="size-3" />
+                      </TooltipTrigger>
+                      <TooltipPopup side="top">Move down</TooltipPopup>
+                    </Tooltip>
+                    {!model.isCustom ? (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              size="icon-micro"
+                              variant="ghost-muted"
+                              onClick={() => handleToggleHidden(model.slug)}
+                              aria-label={`${isHidden ? "Show" : "Hide"} ${accessibleName}`}
+                            />
+                          }
+                        >
+                          {isHidden ? (
+                            <EyeIcon className="size-3" />
+                          ) : (
+                            <EyeOffIcon className="size-3" />
+                          )}
+                        </TooltipTrigger>
+                        <TooltipPopup side="top">
+                          {isHidden ? "Show in picker" : "Hide from picker"}
+                        </TooltipPopup>
+                      </Tooltip>
+                    ) : null}
+                    {model.isCustom ? (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              size="icon-micro"
+                              variant="ghost-muted"
+                              aria-label={`Remove ${model.slug}`}
+                              onClick={() => handleRemove(model.slug)}
+                            />
+                          }
+                        >
+                          <XIcon className="size-3" />
+                        </TooltipTrigger>
+                        <TooltipPopup side="top">Remove custom model</TooltipPopup>
+                      </Tooltip>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
 
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">

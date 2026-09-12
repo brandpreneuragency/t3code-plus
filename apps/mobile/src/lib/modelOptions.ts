@@ -27,6 +27,10 @@ export type ProviderGroup = {
   readonly models: ReadonlyArray<ModelOption>;
 };
 
+export function modelOptionDisplayLabel(option: Pick<ModelOption, "label" | "subtitle">): string {
+  return option.subtitle ? `${option.subtitle} / ${option.label}` : option.label;
+}
+
 function providerDisplayLabel(provider: {
   readonly displayName?: string | undefined;
   readonly driver: string;
@@ -36,6 +40,7 @@ function providerDisplayLabel(provider: {
   if (provider.driver === "codex") return "Codex";
   if (provider.driver === "claudeAgent") return "Claude";
   if (provider.driver === "commandCode") return "Command Code";
+  if (provider.driver === "antigravity") return "Antigravity";
   return provider.instanceId;
 }
 

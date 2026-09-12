@@ -784,6 +784,11 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.serverGetUsageSummary,
       staleTimeMs: 60_000,
     }),
+    usageLimits: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:usage-limits",
+      tag: WS_METHODS.serverGetUsageLimits,
+      staleTimeMs: 30_000,
+    }),
     modelCatalogue,
     modelCatalogueCredentialStatus,
     configProjection,

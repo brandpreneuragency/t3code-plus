@@ -56,7 +56,11 @@ import {
 import { ControlPill } from "../../components/ControlPill";
 import { ProviderIcon } from "../../components/ProviderIcon";
 import type { DraftComposerAttachment } from "../../lib/composerImages";
-import { buildModelOptions, groupByProvider } from "../../lib/modelOptions";
+import {
+  buildModelOptions,
+  groupByProvider,
+  modelOptionDisplayLabel,
+} from "../../lib/modelOptions";
 import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import type { RemoteClientConnectionState } from "../../lib/connection";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
@@ -692,7 +696,11 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
                     iconNode={
                       <ProviderIcon provider={currentModelOption?.providerDriver} size={16} />
                     }
-                    label={currentModelOption?.label ?? currentModelSelection.model}
+                    label={
+                      currentModelOption
+                        ? modelOptionDisplayLabel(currentModelOption)
+                        : currentModelSelection.model
+                    }
                     maxWidth={152}
                     onPress={openSettings}
                   />

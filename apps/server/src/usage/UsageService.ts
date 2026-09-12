@@ -15,6 +15,9 @@ import * as NodeOS from "node:os";
 
 import {
   USAGE_CONTRACT_VERSION,
+  USAGE_LIMITS_CONTRACT_VERSION,
+  type UsageLimitProviderSnapshot,
+  type UsageLimitsSummary,
   type UsageProviderKind,
   type UsageSource,
   type UsageSummary,
@@ -41,6 +44,8 @@ import { resolveClaudeHomePath } from "../provider/Drivers/ClaudeHome.ts";
 import { resolveCodexHomeLayout } from "../provider/Drivers/CodexHomeLayout.ts";
 import { UsageAggregator } from "./usageAggregation.ts";
 import { parseRateTable, type RateTable } from "./usagePricing.ts";
+import type { ParsedUsageLimitSnapshot } from "./usageLimits.ts";
+import { readLatestLimitSnapshot } from "./usageLimitsReader.ts";
 import {
   listTranscriptFiles,
   readDirectoryVolumeId,
@@ -71,6 +76,10 @@ const MAX_HOURLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 /** Longest window the UI offers, plus slack. Older entries are pruned. */
 const CACHE_RETENTION_DAYS = 90;
 
+/** Limit snapshots older than this are not worth showing as "current". */
+const LIMIT_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+const LIMIT_MAX_FILES = 25;
+
 /** On-disk shape of the rate snapshot. */
 const RatesCacheFile = Schema.Struct({
   fetchedAtMs: Schema.Number,
@@ -92,6 +101,7 @@ export class UsageService extends Context.Service<
   UsageService,
   {
     readonly readSummary: (input: UsageSummaryInput) => Effect.Effect<UsageSummary, UsageReadError>;
+    readonly readLimits: () => Effect.Effect<UsageLimitsSummary, UsageReadError>;
   }
 >()("t3/usage/UsageService") {}
 
@@ -114,6 +124,13 @@ export const layerTest = Layer.succeed(
           fetchedAt: null,
           knownModels: 0,
         },
+        scanDurationMs: 0,
+      }),
+    readLimits: () =>
+      Effect.succeed({
+        contractVersion: USAGE_LIMITS_CONTRACT_VERSION,
+        readAt: "1970-01-01T00:00:00.000Z",
+        providers: [],
         scanDurationMs: 0,
       }),
   }),
@@ -459,7 +476,102 @@ export const make = Effect.gen(function* () {
     } satisfies UsageSummary;
   });
 
-  return { readSummary } as const;
+  const readLimits = Effect.fn("UsageService.readLimits")(function* () {
+    const startedAtMs = yield* Clock.currentTimeMillis;
+    const hostId = NodeOS.hostname();
+    const dirs = yield* resolveTranscriptDirs().pipe(Effect.provideService(Path.Path, path));
+    const sinceMs = startedAtMs - LIMIT_MAX_AGE_MS;
+    const providers: UsageLimitProviderSnapshot[] = [];
+
+    for (const { provider, dir, fileName } of dirs) {
+      const volumeId = yield* Effect.promise(() => readDirectoryVolumeId(dir));
+      const fingerprint = {
+        hostId,
+        provider,
+        resolvedHomePath: dir,
+        volumeId,
+      };
+
+      if (provider === "grok") {
+        providers.push({
+          provider,
+          status: "unsupported",
+          planType: null,
+          observedAt: null,
+          windows: [],
+          message: "Grok Build does not publish remaining plan limits in session files.",
+          fingerprint,
+        });
+        continue;
+      }
+
+      const exists = yield* fileSystem
+        .exists(dir)
+        .pipe(Effect.catchCause(() => Effect.succeed(false)));
+      if (!exists) {
+        providers.push({
+          provider,
+          status: "missing",
+          planType: null,
+          observedAt: null,
+          windows: [],
+          message: "No transcript directory on this environment.",
+          fingerprint,
+        });
+        continue;
+      }
+
+      const files = yield* Effect.promise(() =>
+        listTranscriptFiles(dir, sinceMs, fileName === undefined ? undefined : { fileName }),
+      );
+      const newestFirst = [...files]
+        .sort((a, b) => b.mtimeMs - a.mtimeMs)
+        .slice(0, LIMIT_MAX_FILES);
+
+      let latest: ParsedUsageLimitSnapshot | null = null;
+      for (const file of newestFirst) {
+        const snapshot = yield* Effect.promise(() => readLatestLimitSnapshot(file.path, provider));
+        if (snapshot !== null) {
+          latest = snapshot;
+          break;
+        }
+      }
+
+      if (latest === null) {
+        providers.push({
+          provider,
+          status: "missing",
+          planType: null,
+          observedAt: null,
+          windows: [],
+          message: "No recent limit snapshot.",
+          fingerprint,
+        });
+        continue;
+      }
+
+      providers.push({
+        provider,
+        status: "ok",
+        planType: latest.planType,
+        observedAt: DateTime.formatIso(DateTime.makeUnsafe(latest.timestampMs)),
+        windows: [...latest.windows],
+        message: null,
+        fingerprint,
+      });
+    }
+
+    const readAt = yield* DateTime.now;
+    const finishedAtMs = yield* Clock.currentTimeMillis;
+    return {
+      contractVersion: USAGE_LIMITS_CONTRACT_VERSION,
+      readAt: DateTime.formatIso(readAt),
+      providers,
+      scanDurationMs: Math.max(0, finishedAtMs - startedAtMs),
+    } satisfies UsageLimitsSummary;
+  });
+
+  return { readSummary, readLimits } as const;
 });
 
 export const layer = Layer.effect(UsageService, make);

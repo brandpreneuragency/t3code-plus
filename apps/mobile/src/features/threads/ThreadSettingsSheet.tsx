@@ -38,7 +38,11 @@ import { AndroidScreenHeader } from "../../components/AndroidScreenHeader";
 import { ProviderIcon } from "../../components/ProviderIcon";
 import { ThemedSwitch } from "../../components/ThemedSwitch";
 import { cn } from "../../lib/cn";
-import type { ModelOption, ProviderGroup } from "../../lib/modelOptions";
+import {
+  modelOptionDisplayLabel,
+  type ModelOption,
+  type ProviderGroup,
+} from "../../lib/modelOptions";
 import { applyProviderOptionSelection } from "../../lib/providerOptions";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
@@ -100,7 +104,7 @@ function ModelRow(props: {
 }) {
   return (
     <Pressable
-      accessibilityLabel={[props.option.label, props.option.subtitle].filter(Boolean).join(", ")}
+      accessibilityLabel={modelOptionDisplayLabel(props.option)}
       accessibilityRole="radio"
       accessibilityState={{ checked: props.selected }}
       onPress={props.onPress}
@@ -116,6 +120,11 @@ function ModelRow(props: {
             className="min-w-0 shrink text-base font-t3-medium text-foreground"
             numberOfLines={1}
           >
+            {props.option.subtitle ? (
+              <Text className="font-t3-medium text-foreground-muted">
+                {props.option.subtitle} /{" "}
+              </Text>
+            ) : null}
             {props.option.label}
           </Text>
           {props.option.isDefault ? (
@@ -129,11 +138,6 @@ function ModelRow(props: {
             </View>
           ) : null}
         </View>
-        {props.option.subtitle ? (
-          <Text className="text-xs text-foreground-muted" numberOfLines={1}>
-            {props.option.subtitle}
-          </Text>
-        ) : null}
       </View>
       {props.selected ? (
         <SymbolView

@@ -5,6 +5,7 @@ import { ProviderInstanceId, type ModelSelection, type ServerConfig } from "@t3t
 import {
   buildModelOptions,
   groupByProvider,
+  modelOptionDisplayLabel,
   resolveDefaultableModelSelection,
   resolveNewTaskModelSelection,
   resolveSelectableModelSelection,
@@ -51,6 +52,33 @@ describe("mobile model options", () => {
         ],
       },
     ]);
+  });
+
+  it("uses the Antigravity label for dynamically discovered CLI models", () => {
+    const config = {
+      providers: [
+        {
+          instanceId: "antigravity",
+          driver: "antigravity",
+          enabled: true,
+          installed: true,
+          auth: { status: "authenticated" },
+          models: [
+            {
+              slug: "gemini-3.8-flash-medium",
+              name: "Gemini 3.8 Flash Medium",
+              isCustom: false,
+              capabilities: null,
+            },
+          ],
+        },
+      ],
+    } as unknown as ServerConfig;
+
+    expect(buildModelOptions(config, null)[0]).toMatchObject({
+      providerLabel: "Antigravity",
+      selection: { instanceId: "antigravity", model: "gemini-3.8-flash-medium" },
+    });
   });
 
   it("distinguishes same-name OpenCode models without changing their routing", () => {
@@ -100,6 +128,7 @@ describe("mobile model options", () => {
     expect(groupByProvider(options)).toEqual([
       { providerKey: "opencode_work", providerLabel: "OpenCode Work", models: options },
     ]);
+    expect(modelOptionDisplayLabel(options[1]!)).toBe("GitHub Copilot / Claude Fable 5");
   });
 
   it("normalizes a legacy fallback selection against current capabilities", () => {

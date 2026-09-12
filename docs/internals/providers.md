@@ -7,7 +7,7 @@ orchestration layer does not know which one is behind a thread.
 
 ## Built-in drivers
 
-[`builtInDrivers.ts`][drivers] exports `BUILT_IN_DRIVERS` with six entries:
+[`builtInDrivers.ts`][drivers] exports `BUILT_IN_DRIVERS` with eight entries:
 
 | Driver kind   | Driver source                                  |
 | ------------- | ---------------------------------------------- |
@@ -15,8 +15,10 @@ orchestration layer does not know which one is behind a thread.
 | `claudeAgent` | [`Drivers/ClaudeDriver.ts`][claude]            |
 | `cursor`      | [`Drivers/CursorDriver.ts`][cursor]            |
 | `grok`        | [`Drivers/GrokDriver.ts`][grok]                |
+| `hermes`      | [`Drivers/HermesDriver.ts`][hermes]            |
 | `commandCode` | [`Drivers/CommandCodeDriver.ts`][command-code] |
 | `opencode`    | [`Drivers/OpenCodeDriver.ts`][opencode]        |
+| `antigravity` | [`Drivers/AntigravityDriver.ts`][antigravity]  |
 
 Each driver declares its `driverKind`, a `configSchema`, and a `create` function that builds an
 adapter in a child scope. Adapter implementations live beside them in
@@ -116,6 +118,10 @@ restricted modes. Cursor and Grok use their own provider permission rules.
 The server does not copy attachments into a project or bypass provider approval rules. If an agent
 cannot read an attachment, the user must approve the access or select a runtime mode that permits it.
 
+Antigravity receives no native attachment content in version 1. It receives paths in the turn text
+and the deduplicated parent directories as `--add-dir` arguments. The adapter must not pass drive
+roots, profile roots, globs, or unresolved directories.
+
 Updated attachment schemas tolerate unknown attachment members, but old image-only clients still
 cannot decode messages that contain file attachments. Client file-picking rollouts must account for
 this limit.
@@ -165,8 +171,10 @@ when a request opens (approval) or user input is requested, via
 [claude]: ../../apps/server/src/provider/Drivers/ClaudeDriver.ts
 [cursor]: ../../apps/server/src/provider/Drivers/CursorDriver.ts
 [grok]: ../../apps/server/src/provider/Drivers/GrokDriver.ts
+[hermes]: ../../apps/server/src/provider/Drivers/HermesDriver.ts
 [command-code]: ../../apps/server/src/provider/Drivers/CommandCodeDriver.ts
 [opencode]: ../../apps/server/src/provider/Drivers/OpenCodeDriver.ts
+[antigravity]: ../../apps/server/src/provider/Drivers/AntigravityDriver.ts
 [opencode-server-owner]: ../../apps/server/src/provider/OpenCodeServerOwner.ts
 [adapter]: ../../apps/server/src/provider/Services/ProviderAdapter.ts
 [instances]: ../../apps/server/src/provider/Services/ProviderInstanceRegistry.ts

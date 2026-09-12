@@ -6,13 +6,19 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import type * as EffectAcpSchema from "effect-acp/schema";
 import { HermesSettings } from "@t3tools/contracts";
+import { isHostWindows } from "@t3tools/shared/hostProcess";
 
 import {
+  buildHermesDiscoveredModelsFromInventory,
   buildHermesDiscoveredModelsFromSessionModelState,
   buildInitialHermesProviderSnapshot,
   checkHermesProviderStatus,
+  encodeHermesModelChoice,
   getHermesFallbackModels,
+  resolveHermesPythonCandidate,
   HERMES_SETUP_MESSAGE,
+  mergeHermesDiscoveredModels,
+  parseHermesInventoryPayload,
   parseHermesSubProvider,
   resolveHermesAuthStatus,
 } from "./HermesProvider.ts";
@@ -82,6 +88,133 @@ describe("parseHermesSubProvider", () => {
   it("returns undefined when the description is not a provider line", () => {
     expect(parseHermesSubProvider("gpt-5.6-sol")).toBeUndefined();
     expect(parseHermesSubProvider(undefined)).toBeUndefined();
+  });
+});
+
+it.layer(NodeServices.layer)("resolveHermesPythonCandidate", (it) => {
+  for (const platform of ["win32", "linux"] as const) {
+    it.effect(`finds the venv python on ${platform}, following a symlink when permitted`, () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-hermes-py-" });
+        const venvBin = path.join(root, "venv", "bin");
+        const localBin = path.join(root, "local", "bin");
+        yield* fs.makeDirectory(venvBin, { recursive: true });
+        yield* fs.makeDirectory(localBin, { recursive: true });
+        const pythonPath = path.join(venvBin, platform === "win32" ? "python.exe" : "python");
+        const hermesReal = path.join(venvBin, "hermes");
+        const hermesLink = path.join(localBin, "hermes");
+        yield* fs.writeFileString(pythonPath, "");
+        yield* fs.writeFileString(hermesReal, "");
+        const candidate = yield* fs.symlink(hermesReal, hermesLink).pipe(
+          Effect.as(hermesLink),
+          Effect.orElseSucceed(() => hermesReal),
+        );
+        expect(yield* fs.realPath(resolveHermesPythonCandidate(candidate, platform)!)).toBe(
+          yield* fs.realPath(pythonPath),
+        );
+      }),
+    );
+  }
+});
+
+describe("parseHermesInventoryPayload", () => {
+  it("parses the root object even when providers contain nested braces", () => {
+    const payload = parseHermesInventoryPayload(
+      'noise\n{"provider":"openai-codex","model":"gpt-5.6-sol","providers":[{"slug":"gemini","name":"Google","models":["gemini-3.1-pro"]}]}',
+    );
+    expect(payload?.provider).toBe("openai-codex");
+    expect((payload?.providers as { slug: string }[] | undefined)?.[0]?.slug).toBe("gemini");
+  });
+});
+
+describe("encodeHermesModelChoice", () => {
+  it("encodes provider and model the way ACP session/set_model expects", () => {
+    expect(encodeHermesModelChoice("OpenAI-Codex", "gpt-5.4")).toBe("openai-codex:gpt-5.4");
+    expect(encodeHermesModelChoice("", "gpt-5.4")).toBe("gpt-5.4");
+  });
+});
+
+describe("buildHermesDiscoveredModelsFromInventory", () => {
+  it("flattens every authenticated provider into ACP-shaped slugs", () => {
+    const models = buildHermesDiscoveredModelsFromInventory({
+      provider: "gemini",
+      model: "gemini-3.1-pro",
+      providers: [
+        { slug: "gemini", name: "Google", models: ["gemini-3.1-pro", "gemini-3-flash"] },
+        { slug: "anthropic", name: "Anthropic", models: ["claude-opus-4.6"] },
+        { slug: "", name: "skip", models: ["nope"] },
+      ],
+    });
+
+    expect(models).toEqual([
+      {
+        slug: "gemini:gemini-3.1-pro",
+        name: "gemini-3.1-pro",
+        subProvider: "Google",
+        isCustom: false,
+        isDefault: true,
+        capabilities: { optionDescriptors: [] },
+      },
+      {
+        slug: "gemini:gemini-3-flash",
+        name: "gemini-3-flash",
+        subProvider: "Google",
+        isCustom: false,
+        capabilities: { optionDescriptors: [] },
+      },
+      {
+        slug: "anthropic:claude-opus-4.6",
+        name: "claude-opus-4.6",
+        subProvider: "Anthropic",
+        isCustom: false,
+        capabilities: { optionDescriptors: [] },
+      },
+    ]);
+  });
+});
+
+describe("mergeHermesDiscoveredModels", () => {
+  it("keeps ACP models and adds other inventory providers", () => {
+    const merged = mergeHermesDiscoveredModels(
+      [
+        {
+          slug: "openai-codex:gpt-5.4",
+          name: "gpt-5.4",
+          subProvider: "OpenAI Codex",
+          isCustom: false,
+          isDefault: true,
+          capabilities: { optionDescriptors: [] },
+        },
+      ],
+      [
+        {
+          slug: "gemini:gemini-3.1-pro",
+          name: "gemini-3.1-pro",
+          subProvider: "Google",
+          isCustom: false,
+          isDefault: true,
+          capabilities: { optionDescriptors: [] },
+        },
+        {
+          slug: "openai-codex:gpt-5.4",
+          name: "gpt-5.4",
+          subProvider: "OpenAI Codex",
+          isCustom: false,
+          capabilities: { optionDescriptors: [] },
+        },
+      ],
+    );
+
+    expect(merged.map((model) => model.slug)).toEqual([
+      "gemini:gemini-3.1-pro",
+      "openai-codex:gpt-5.4",
+    ]);
+    expect(merged.find((model) => model.slug === "openai-codex:gpt-5.4")?.isDefault).toBe(true);
+    expect(
+      merged.find((model) => model.slug === "gemini:gemini-3.1-pro")?.isDefault,
+    ).toBeUndefined();
   });
 });
 
@@ -226,11 +359,14 @@ it.layer(NodeServices.layer)("checkHermesProviderStatus", (it) => {
         Effect.gen(function* () {
           const fs = yield* FileSystem.FileSystem;
           const path = yield* Path.Path;
+          const isWindows = yield* isHostWindows;
           const dir = yield* fs.makeTempDirectoryScoped({ prefix: "t3code-hermes-version-" });
-          const hermesPath = path.join(dir, "hermes");
+          const hermesPath = path.join(dir, isWindows ? "hermes.cmd" : "hermes");
           yield* fs.writeFileString(
             hermesPath,
-            ["#!/bin/sh", 'printf "hermes-agent 0.19.0\\n"', "exit 0", ""].join("\n"),
+            isWindows
+              ? ["@echo off", "echo hermes-agent 0.19.0", "exit /b 0", ""].join("\r\n")
+              : ["#!/bin/sh", 'printf "hermes-agent 0.19.0\\n"', "exit 0", ""].join("\n"),
           );
           yield* fs.chmod(hermesPath, 0o755);
 

@@ -193,6 +193,7 @@ import {
   ResourceTelemetrySnapshot,
 } from "./resourceTelemetry.ts";
 import { UsageReadError, UsageSummary, UsageSummaryInput } from "./usage.ts";
+import { UsageLimitsSummary } from "./usageLimits.ts";
 import {
   ModelCatalogueCredentialError,
   ModelCatalogueCredentialStatus,
@@ -297,6 +298,7 @@ export const WS_METHODS = {
   serverReportHostPowerState: "server.reportHostPowerState",
   serverGetBackgroundPolicy: "server.getBackgroundPolicy",
   serverGetUsageSummary: "server.getUsageSummary",
+  serverGetUsageLimits: "server.getUsageLimits",
   serverGetModelCatalogue: "server.getModelCatalogue",
   serverGetModelCatalogueCredentialStatus: "server.getModelCatalogueCredentialStatus",
   serverSetModelCatalogueCredential: "server.setModelCatalogueCredential",
@@ -459,6 +461,12 @@ export const WsServerRetryResourceTelemetryRpc = Rpc.make(WS_METHODS.serverRetry
 export const WsServerGetUsageSummaryRpc = Rpc.make(WS_METHODS.serverGetUsageSummary, {
   payload: UsageSummaryInput,
   success: UsageSummary,
+  error: Schema.Union([EnvironmentAuthorizationError, UsageReadError]),
+});
+
+export const WsServerGetUsageLimitsRpc = Rpc.make(WS_METHODS.serverGetUsageLimits, {
+  payload: Schema.Struct({}),
+  success: UsageLimitsSummary,
   error: Schema.Union([EnvironmentAuthorizationError, UsageReadError]),
 });
 
@@ -1077,6 +1085,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetResourceTelemetryHistoryRpc,
   WsServerRetryResourceTelemetryRpc,
   WsServerGetUsageSummaryRpc,
+  WsServerGetUsageLimitsRpc,
   WsServerGetModelCatalogueRpc,
   WsServerGetModelCatalogueCredentialStatusRpc,
   WsServerSetModelCatalogueCredentialRpc,

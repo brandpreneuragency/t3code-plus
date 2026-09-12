@@ -137,7 +137,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
         ? "settings"
         : /^\/projects\/[^/]+\/?$/.test(location.pathname)
           ? "project-settings"
-          : location.pathname === "/usage"
+          : location.pathname === "/usage" || location.pathname === "/limits"
             ? "usage"
             : location.pathname === "/models"
               ? "models"

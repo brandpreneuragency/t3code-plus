@@ -1,4 +1,5 @@
-import { Path, Svg } from "react-native-svg";
+import { ANTIGRAVITY_ICON_DATA_URL } from "@t3tools/shared/antigravityIcon";
+import { Image as SvgImage, Path, Svg } from "react-native-svg";
 import { useAppearancePreferences } from "../features/settings/appearance/AppearancePreferencesProvider";
 
 type ProviderIconProps = {
@@ -84,6 +85,14 @@ export function ProviderIcon(props: ProviderIconProps) {
       <Svg width={size} height={size} viewBox="0 0 32 40" fill="none">
         <Path d="M24 32H8V16H24V32Z" fill={isDarkMode ? "#4B4646" : "#CFCECD"} />
         <Path d="M24 8H8V32H24V8ZM32 40H0V0H32V40Z" fill={isDarkMode ? "#F1ECEC" : "#211E1E"} />
+      </Svg>
+    );
+  }
+
+  if (props.provider === "antigravity") {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 128 128" fill="none">
+        <SvgImage href={ANTIGRAVITY_ICON_DATA_URL} width="128" height="128" />
       </Svg>
     );
   }

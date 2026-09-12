@@ -36,6 +36,28 @@ describe("parseCommandCodeNdjsonLine", () => {
     ).toEqual({ kind: "thinking", text: "hmm" });
   });
 
+  it("keeps spaces and newlines in text deltas", () => {
+    expect(parseCommandCodeNdjsonLine(JSON.stringify({ type: "text_delta", text: " " }))).toEqual({
+      kind: "text",
+      text: " ",
+    });
+    expect(
+      parseCommandCodeNdjsonLine(JSON.stringify({ type: "text_delta", text: " world" })),
+    ).toEqual({ kind: "text", text: " world" });
+    expect(
+      parseCommandCodeNdjsonLine(JSON.stringify({ type: "text_delta", delta: "Hello " })),
+    ).toEqual({ kind: "text", text: "Hello " });
+    expect(
+      parseCommandCodeNdjsonLine(JSON.stringify({ type: "thinking_delta", text: "\n\n" })),
+    ).toEqual({ kind: "thinking", text: "\n\n" });
+  });
+
+  it("ignores empty text deltas", () => {
+    expect(
+      parseCommandCodeNdjsonLine(JSON.stringify({ type: "text_delta", text: "" })),
+    ).toBeUndefined();
+  });
+
   it("reads the final result line and treats sessionId as optional", () => {
     expect(
       parseCommandCodeNdjsonLine(

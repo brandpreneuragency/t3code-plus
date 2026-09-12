@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 import * as Schema from "effect/Schema";
 
+import { DEFAULT_MODEL_BY_PROVIDER } from "./model.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 import {
   ClientSettingsSchema,
   ClientSettingsPatch,
   ClaudeSettings,
+  AntigravitySettings,
   DEFAULT_SERVER_SETTINGS,
   defaultEnabledForDriver,
   resolveProviderInstanceEnabled,
@@ -19,6 +21,33 @@ const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
 const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
+const decodeAntigravitySettings = Schema.decodeUnknownSync(AntigravitySettings);
+
+describe("AntigravitySettings", () => {
+  it("uses the preferred discovered-model fallback", () => {
+    expect(DEFAULT_MODEL_BY_PROVIDER[ProviderDriverKind.make("antigravity")]).toBe(
+      "gemini-3.8-flash-medium",
+    );
+  });
+
+  it("is disabled by default and uses the PATH agy binary", () => {
+    expect(decodeAntigravitySettings({})).toMatchObject({
+      enabled: false,
+      binaryPath: "agy",
+      customModels: [],
+    });
+  });
+
+  it("accepts the legacy-provider settings patch", () => {
+    expect(
+      decodeServerSettingsPatch({
+        providers: { antigravity: { enabled: true, binaryPath: " C:\\agy\\agy.exe " } },
+      }),
+    ).toMatchObject({
+      providers: { antigravity: { enabled: true, binaryPath: "C:\\agy\\agy.exe" } },
+    });
+  });
+});
 
 describe("ClaudeSettings auto-compaction", () => {
   it("uses Claude's default threshold when no override is configured", () => {
@@ -241,6 +270,7 @@ describe("provider enabled defaults", () => {
     expect(decoded.providers.grok.enabled).toBe(false);
     expect(decoded.providers.hermes.enabled).toBe(false);
     expect(decoded.providers.commandCode.enabled).toBe(false);
+    expect(decoded.providers.antigravity.enabled).toBe(false);
     expect(decoded.providers.opencode.enabled).toBe(false);
   });
 
@@ -250,6 +280,7 @@ describe("provider enabled defaults", () => {
     expect(defaultEnabledForDriver(ProviderDriverKind.make("grok"))).toBe(false);
     expect(defaultEnabledForDriver(ProviderDriverKind.make("hermes"))).toBe(false);
     expect(defaultEnabledForDriver(ProviderDriverKind.make("commandCode"))).toBe(false);
+    expect(defaultEnabledForDriver(ProviderDriverKind.make("antigravity"))).toBe(false);
     // Unknown fork drivers stay enabled; their own build decides otherwise.
     expect(defaultEnabledForDriver(ProviderDriverKind.make("ollama"))).toBe(true);
   });

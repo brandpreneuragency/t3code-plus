@@ -1,4 +1,5 @@
 import {
+  AntigravitySettings,
   ClaudeSettings,
   CodexSettings,
   CommandCodeSettings,
@@ -10,6 +11,7 @@ import {
 } from "@t3tools/contracts";
 import type * as Schema from "effect/Schema";
 import {
+  AntigravityIcon,
   ClaudeAI,
   CommandCodeIcon,
   CursorIcon,
@@ -85,6 +87,13 @@ export const PROVIDER_CLIENT_DEFINITIONS: readonly ProviderClientDefinition[] = 
     icon: CommandCodeIcon,
     badgeLabel: "Early Access",
     settingsSchema: CommandCodeSettings,
+  },
+  {
+    value: ProviderDriverKind.make("antigravity"),
+    label: "Antigravity",
+    icon: AntigravityIcon,
+    badgeLabel: "Experimental",
+    settingsSchema: AntigravitySettings,
   },
   {
     value: ProviderDriverKind.make("opencode"),

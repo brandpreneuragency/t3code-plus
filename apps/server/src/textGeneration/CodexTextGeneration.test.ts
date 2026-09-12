@@ -7,6 +7,7 @@ import * as Path from "effect/Path";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { createModelSelection } from "@t3tools/shared/model";
+import { isHostWindows } from "@t3tools/shared/hostProcess";
 import { expect } from "vite-plus/test";
 
 import { CodexSettings, ProviderInstanceId, TextGenerationError } from "@t3tools/contracts";
@@ -44,132 +45,54 @@ function makeFakeCodexBinary(
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+    const isWindows = yield* isHostWindows;
     const binDir = path.join(dir, "bin");
-    const codexPath = path.join(binDir, "codex");
+    const codexPath = path.join(binDir, isWindows ? "codex.cmd" : "codex");
+    const stubPath = path.join(binDir, "codex-stub.mjs");
     yield* fs.makeDirectory(binDir, { recursive: true });
 
+    // Run the same assertions on Windows and POSIX through a Node fixture.
     yield* fs.writeFileString(
-      codexPath,
+      stubPath,
       [
-        "#!/bin/sh",
-        'original_args="$*"',
-        'output_path=""',
-        'seen_image="0"',
-        'seen_service_tier=""',
-        'seen_reasoning_effort=""',
-        "while [ $# -gt 0 ]; do",
-        '  if [ "$1" = "--image" ]; then',
-        "    shift",
-        '    if [ -n "$1" ]; then',
-        '      seen_image="1"',
-        "    fi",
-        "    shift",
-        "    continue",
-        "  fi",
-        '  if [ "$1" = "--config" ]; then',
-        "    shift",
-        '    case "$1" in',
-        "      service_tier=*)",
-        '        seen_service_tier="$1"',
-        "        ;;",
-        "    esac",
-        '    case "$1" in',
-        "      model_reasoning_effort=*)",
-        '        seen_reasoning_effort="$1"',
-        "        ;;",
-        "    esac",
-        "    shift",
-        "    continue",
-        "  fi",
-        '  if [ "$1" = "--output-last-message" ]; then',
-        "    shift",
-        '    output_path="$1"',
-        "    shift",
-        "    continue",
-        "  fi",
-        "  shift",
-        "done",
-        'stdin_content="$(cat)"',
-        ...(input.requireArg !== undefined
-          ? [
-              `case " $original_args " in *" ${input.requireArg} "*) ;; *)`,
-              `  printf "%s\\n" "missing arg: ${input.requireArg}" >&2`,
-              `  exit 8`,
-              "esac",
-            ]
-          : []),
-        ...(input.forbidArg !== undefined
-          ? [
-              `case " $original_args " in *" ${input.forbidArg} "*)`,
-              `  printf "%s\\n" "forbidden arg: ${input.forbidArg}" >&2`,
-              `  exit 9`,
-              "esac",
-            ]
-          : []),
-        ...(input.requireImage
-          ? [
-              'if [ "$seen_image" != "1" ]; then',
-              '  printf "%s\\n" "missing --image input" >&2',
-              `  exit 2`,
-              "fi",
-            ]
-          : []),
-        ...(input.requireServiceTier
-          ? [
-              `if [ "$seen_service_tier" != "service_tier=\\"${input.requireServiceTier}\\"" ]; then`,
-              '  printf "%s\\n" "unexpected service tier config: $seen_service_tier" >&2',
-              `  exit 5`,
-              "fi",
-            ]
-          : []),
-        ...(input.requireReasoningEffort !== undefined
-          ? [
-              `if [ "$seen_reasoning_effort" != "model_reasoning_effort=\\"${input.requireReasoningEffort}\\"" ]; then`,
-              '  printf "%s\\n" "unexpected reasoning effort config: $seen_reasoning_effort" >&2',
-              `  exit 6`,
-              "fi",
-            ]
-          : []),
-        ...(input.forbidReasoningEffort
-          ? [
-              'if [ -n "$seen_reasoning_effort" ]; then',
-              '  printf "%s\\n" "reasoning effort config should be omitted: $seen_reasoning_effort" >&2',
-              `  exit 7`,
-              "fi",
-            ]
-          : []),
-        ...(input.stdinMustContain !== undefined
-          ? [
-              // @effect-diagnostics-next-line preferSchemaOverJson:off
-              `if ! printf "%s" "$stdin_content" | grep -F -- ${JSON.stringify(input.stdinMustContain)} >/dev/null; then`,
-              '  printf "%s\\n" "stdin missing expected content" >&2',
-              `  exit 3`,
-              "fi",
-            ]
-          : []),
-        ...(input.stdinMustNotContain !== undefined
-          ? [
-              // @effect-diagnostics-next-line preferSchemaOverJson:off
-              `if printf "%s" "$stdin_content" | grep -F -- ${JSON.stringify(input.stdinMustNotContain)} >/dev/null; then`,
-              '  printf "%s\\n" "stdin contained forbidden content" >&2',
-              `  exit 4`,
-              "fi",
-            ]
-          : []),
-        ...(input.stderr !== undefined
-          ? [
-              // @effect-diagnostics-next-line preferSchemaOverJson:off
-              `printf "%s\\n" ${JSON.stringify(input.stderr)} >&2`,
-            ]
-          : []),
-        'if [ -n "$output_path" ]; then',
-        "  cat > \"$output_path\" <<'__T3CODE_FAKE_CODEX_OUTPUT__'",
-        input.output,
-        "__T3CODE_FAKE_CODEX_OUTPUT__",
-        "fi",
-        `exit ${input.exitCode ?? 0}`,
+        'import * as fs from "node:fs";',
+        // @effect-diagnostics-next-line preferSchemaOverJson:off
+        `const fixture = ${JSON.stringify(input)};`,
+        "const args = process.argv.slice(2);",
+        "const chunks = [];",
+        "for await (const chunk of process.stdin) chunks.push(chunk);",
+        'const stdin = Buffer.concat(chunks).toString("utf8");',
+        "function fail(message, code) {",
+        '  process.stderr.write(message + "\\n");',
+        "  process.exit(code);",
+        "}",
+        "function valueAfter(flag) {",
+        "  const index = args.indexOf(flag);",
+        "  return index < 0 ? undefined : args[index + 1];",
+        "}",
+        'const configs = args.flatMap((arg, index) => arg === "--config" ? [args[index + 1]] : []);',
+        'const serviceTier = configs.find((value) => value?.startsWith("service_tier="));',
+        'const effort = configs.find((value) => value?.startsWith("model_reasoning_effort="));',
+        'if (fixture.requireArg !== undefined && !args.includes(fixture.requireArg)) fail("missing arg: " + fixture.requireArg, 8);',
+        'if (fixture.forbidArg !== undefined && args.includes(fixture.forbidArg)) fail("forbidden arg: " + fixture.forbidArg, 9);',
+        'if (fixture.requireImage && !valueAfter("--image")) fail("missing --image input", 2);',
+        'if (fixture.requireServiceTier !== undefined && serviceTier !== "service_tier=" + JSON.stringify(fixture.requireServiceTier)) fail("unexpected service tier config: " + serviceTier, 5);',
+        'if (fixture.requireReasoningEffort !== undefined && effort !== "model_reasoning_effort=" + JSON.stringify(fixture.requireReasoningEffort)) fail("unexpected reasoning effort config: " + effort, 6);',
+        'if (fixture.forbidReasoningEffort && effort) fail("reasoning effort config should be omitted: " + effort, 7);',
+        'if (fixture.stdinMustContain !== undefined && !stdin.includes(fixture.stdinMustContain)) fail("stdin missing expected content", 3);',
+        'if (fixture.stdinMustNotContain !== undefined && stdin.includes(fixture.stdinMustNotContain)) fail("stdin contained forbidden content", 4);',
+        'if (fixture.stderr !== undefined) process.stderr.write(fixture.stderr + "\\n");',
+        'const outputPath = valueAfter("--output-last-message");',
+        "if (outputPath) fs.writeFileSync(outputPath, fixture.output);",
+        "process.exitCode = fixture.exitCode ?? 0;",
         "",
       ].join("\n"),
+    );
+    yield* fs.writeFileString(
+      codexPath,
+      isWindows
+        ? ["@echo off", 'node "%~dp0codex-stub.mjs" %*', "exit /b %ERRORLEVEL%", ""].join("\r\n")
+        : ["#!/bin/sh", 'exec node "$(dirname "$0")/codex-stub.mjs" "$@"', ""].join("\n"),
     );
     yield* fs.chmod(codexPath, 0o755);
     return codexPath;

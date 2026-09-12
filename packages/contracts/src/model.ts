@@ -133,6 +133,7 @@ const CURSOR_DRIVER_KIND = ProviderDriverKind.make("cursor");
 const GROK_DRIVER_KIND = ProviderDriverKind.make("grok");
 const HERMES_DRIVER_KIND = ProviderDriverKind.make("hermes");
 const COMMAND_CODE_DRIVER_KIND = ProviderDriverKind.make("commandCode");
+const ANTIGRAVITY_DRIVER_KIND = ProviderDriverKind.make("antigravity");
 const OPENCODE_DRIVER_KIND = ProviderDriverKind.make("opencode");
 
 export const DEFAULT_MODEL = "gpt-5.6-sol";
@@ -155,6 +156,7 @@ export const DEFAULT_MODEL_BY_PROVIDER: Partial<Record<ProviderDriverKind, strin
   [CURSOR_DRIVER_KIND]: "auto",
   [GROK_DRIVER_KIND]: "grok-build",
   [COMMAND_CODE_DRIVER_KIND]: "deepseek/deepseek-v4-flash",
+  [ANTIGRAVITY_DRIVER_KIND]: "gemini-3.8-flash-medium",
   [OPENCODE_DRIVER_KIND]: "openai/gpt-5",
 };
 
@@ -166,6 +168,7 @@ export const DEFAULT_TEXT_GENERATION_MODEL_BY_PROVIDER: Partial<
   [CLAUDE_DRIVER_KIND]: "claude-haiku-4-5",
   [CURSOR_DRIVER_KIND]: "composer-2",
   [COMMAND_CODE_DRIVER_KIND]: "deepseek/deepseek-v4-flash",
+  [ANTIGRAVITY_DRIVER_KIND]: "gemini-3.8-flash-medium",
   [OPENCODE_DRIVER_KIND]: "openai/gpt-5",
 };
 
@@ -227,5 +230,6 @@ export const PROVIDER_DISPLAY_NAMES: Partial<Record<ProviderDriverKind, string>>
   [GROK_DRIVER_KIND]: "Grok",
   [HERMES_DRIVER_KIND]: "Hermes",
   [COMMAND_CODE_DRIVER_KIND]: "Command Code",
+  [ANTIGRAVITY_DRIVER_KIND]: "Antigravity",
   [OPENCODE_DRIVER_KIND]: "OpenCode",
 };

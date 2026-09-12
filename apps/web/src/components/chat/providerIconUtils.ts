@@ -1,5 +1,14 @@
 import { ProviderDriverKind } from "@t3tools/contracts";
-import { ClaudeAI, CursorIcon, GrokIcon, HermesIcon, Icon, OpenAI, OpenCodeIcon } from "../Icons";
+import {
+  AntigravityIcon,
+  ClaudeAI,
+  CursorIcon,
+  GrokIcon,
+  HermesIcon,
+  Icon,
+  OpenAI,
+  OpenCodeIcon,
+} from "../Icons";
 import { PROVIDER_OPTIONS } from "../../session-logic";
 
 export const PROVIDER_ICON_BY_PROVIDER: Partial<Record<ProviderDriverKind, Icon>> = {
@@ -9,6 +18,7 @@ export const PROVIDER_ICON_BY_PROVIDER: Partial<Record<ProviderDriverKind, Icon>
   [ProviderDriverKind.make("cursor")]: CursorIcon,
   [ProviderDriverKind.make("grok")]: GrokIcon,
   [ProviderDriverKind.make("hermes")]: HermesIcon,
+  [ProviderDriverKind.make("antigravity")]: AntigravityIcon,
 };
 
 function isAvailableProviderOption(option: (typeof PROVIDER_OPTIONS)[number]): option is {
@@ -53,10 +63,28 @@ export function getDisplayModelName(
   return stripLeadingQualifier(name, model.subProvider);
 }
 
+export function getModelSubProviderLabel(
+  model: Pick<ModelEsque, "subProvider">,
+): string | undefined {
+  const prefix = model.subProvider?.trim();
+  return prefix && prefix.length > 0 ? prefix : undefined;
+}
+
+export function formatModelNameWithSubProvider(input: {
+  readonly name: string;
+  readonly subProvider?: string | undefined;
+}): string {
+  const prefix = getModelSubProviderLabel(input);
+  return prefix ? `${prefix} / ${input.name}` : input.name;
+}
+
 export function getTriggerDisplayModelName(model: ModelEsque): string {
   return getDisplayModelName(model, { preferShortName: true });
 }
 
 export function getTriggerDisplayModelLabel(model: ModelEsque): string {
-  return getTriggerDisplayModelName(model);
+  return formatModelNameWithSubProvider({
+    name: getTriggerDisplayModelName(model),
+    subProvider: model.subProvider,
+  });
 }

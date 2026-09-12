@@ -341,6 +341,7 @@ const PERSISTED_SERVER_SETTINGS_DEFAULTS = {
     grok: { ...DEFAULT_SERVER_SETTINGS.providers.grok, enabled: undefined },
     hermes: { ...DEFAULT_SERVER_SETTINGS.providers.hermes, enabled: undefined },
     commandCode: { ...DEFAULT_SERVER_SETTINGS.providers.commandCode, enabled: undefined },
+    antigravity: { ...DEFAULT_SERVER_SETTINGS.providers.antigravity, enabled: undefined },
     opencode: { ...DEFAULT_SERVER_SETTINGS.providers.opencode, enabled: undefined },
   },
 };

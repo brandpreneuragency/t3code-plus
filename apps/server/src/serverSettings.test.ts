@@ -915,11 +915,15 @@ it.layer(NodeServices.layer)("server settings", (it) => {
           claudeAgent: {
             binaryPath: "",
           },
+          antigravity: {
+            binaryPath: "  ",
+          },
         },
       });
 
       assert.equal(next.providers.codex.binaryPath, "codex");
       assert.equal(next.providers.claudeAgent.binaryPath, "claude");
+      assert.equal(next.providers.antigravity.binaryPath, "agy");
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
@@ -964,6 +968,15 @@ it.layer(NodeServices.layer)("server settings", (it) => {
             enabled: false,
           },
           grok: {
+            enabled: false,
+          },
+          hermes: {
+            enabled: false,
+          },
+          commandCode: {
+            enabled: false,
+          },
+          antigravity: {
             enabled: false,
           },
           opencode: {

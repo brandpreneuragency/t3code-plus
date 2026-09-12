@@ -37,6 +37,14 @@ describe("ProviderSettingsForm helpers", () => {
     });
   });
 
+  it("marks Antigravity experimental and exposes only its binary path", () => {
+    const antigravity = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("antigravity")];
+    expect(antigravity).toMatchObject({ label: "Antigravity", badgeLabel: "Experimental" });
+    expect(deriveProviderSettingsFields(antigravity!).map((field) => field.key)).toEqual([
+      "binaryPath",
+    ]);
+  });
+
   it("shows the auto-compaction threshold for Claude providers", () => {
     const claude = DRIVER_OPTION_BY_VALUE[ProviderDriverKind.make("claudeAgent")];
     expect(claude).toBeDefined();

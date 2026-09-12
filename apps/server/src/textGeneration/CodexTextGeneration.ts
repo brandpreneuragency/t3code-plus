@@ -202,7 +202,6 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
           "--output-last-message",
           outputPath,
           ...imagePaths.flatMap((imagePath) => ["--image", imagePath]),
-          "-",
         ],
         { env: resolvedEnvironment },
       );

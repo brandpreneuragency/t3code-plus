@@ -28,6 +28,10 @@ function nonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
+function textDelta(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 function eventRecord(value: unknown): Record<string, unknown> | undefined {
   if (!isRecord(value)) return undefined;
   if (value.type === "event" && isRecord(value.event)) {
@@ -37,7 +41,7 @@ function eventRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 function textFromRecord(record: Record<string, unknown>): string | undefined {
-  return nonEmptyString(record.text) ?? nonEmptyString(record.delta);
+  return textDelta(record.text) ?? textDelta(record.delta);
 }
 
 function parseToolStatus(type: string): "running" | "completed" | "failed" | undefined {

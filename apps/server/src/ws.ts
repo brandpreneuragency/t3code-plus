@@ -1770,6 +1770,10 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.serverGetUsageSummary, usage.readSummary(input), {
             "rpc.aggregate": "server",
           }),
+        [WS_METHODS.serverGetUsageLimits]: (_input) =>
+          observeRpcEffect(WS_METHODS.serverGetUsageLimits, usage.readLimits(), {
+            "rpc.aggregate": "server",
+          }),
         [WS_METHODS.serverGetModelCatalogue]: (_input) =>
           observeRpcEffect(WS_METHODS.serverGetModelCatalogue, modelCatalogue.read(), {
             "rpc.aggregate": "server",

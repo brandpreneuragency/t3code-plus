@@ -114,6 +114,16 @@ export function UsageRouteScreen() {
           selected={windowDays}
           onSelect={selectWindow}
         />
+        <Pressable
+          onPress={() =>
+            navigation.navigate("SettingsSheet", {
+              screen: "SettingsContent",
+              params: { screen: "SettingsUsageLimits" },
+            })
+          }
+        >
+          <Text className="text-base text-foreground">Remaining limits</Text>
+        </Pressable>
 
         <UsageCoverageNotice environments={environments} merged={merged} isPartial={isPartial} />
 

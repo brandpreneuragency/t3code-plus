@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./antigravityIcon": {
+      "types": "./src/antigravityIcon.ts",
+      "import": "./src/antigravityIcon.ts"
+    },
     "./themePalettes": {
       "types": "./src/themePalettes.ts",
       "import": "./src/themePalettes.ts"
@@ -226,6 +230,14 @@
     "./usageFormat": {
       "types": "./src/usageFormat.ts",
       "import": "./src/usageFormat.ts"
+    },
+    "./usageLimitsMerge": {
+      "types": "./src/usageLimitsMerge.ts",
+      "import": "./src/usageLimitsMerge.ts"
+    },
+    "./usageLimitsFormat": {
+      "types": "./src/usageLimitsFormat.ts",
+      "import": "./src/usageLimitsFormat.ts"
     },
     "./modelId": {
       "types": "./src/modelId.ts",

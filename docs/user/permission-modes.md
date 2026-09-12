@@ -48,4 +48,10 @@ threads do the same: **Supervised** starts Grok in ask mode even if your Grok CL
 set to always-approve, and **Full access** starts Grok with always-approve. The labels above
 describe what you get; the exact per-provider translation is internal and may change.
 
+Antigravity's headless CLI cannot wait for T3's inline approvals. Its **Supervised** and **Auto**
+threads use Antigravity plan mode with a terminal sandbox and may have approval-requiring work
+soft-denied. **Auto-accept edits** uses Antigravity accept-edits mode, while only **Full access**
+permits its all-permissions CLI flag. A thread in **Plan** interaction mode always uses
+Antigravity plan mode. See [Antigravity](./providers-antigravity.md) for the complete limits.
+
 Mobile offers the same four modes with the same labels and descriptions.
